@@ -14,13 +14,33 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
-typedef uint8_t (*ReadFunc)(uint32_t);
-typedef void (*WriteFunc)(uint32_t, uint8_t);
-typedef uint8_t (*ReadPort)(uint8_t);
-typedef void (*WritePort)(uint8_t, uint8_t data);
+#define CAST_TO_FLOAT(U) *(float*)&U
+
+#define LIB_VERSION "0.1.0"
+
+enum STATUS_FLAGS {
+    S_IL = 1 << 0, // Illegal
+    S_HL = 1 << 1, // Halt
+};
+
+enum MATH_FLAGS {
+    M_OV = 1 << 0, // Overflow
+    M_CR = 1 << 1, // Carry
+};
+
+typedef uint8_t (*ReadFunc)(uint32_t addr);
+typedef void (*WriteFunc)(uint32_t addr, uint8_t data);
+typedef uint8_t (*ReadPort)(uint8_t port);
+typedef void (*WritePort)(uint8_t port, uint8_t data);
 
 typedef struct _SARCH_BASE {
+    /// DATA FOR EMULATION
+    uint32_t total_cycles;
+    uint32_t cycles; // Spent on instruction
+    bool log;
+
     /// Inaccessible registers (needed for implementation)
 
     uint32_t ar0;
@@ -31,8 +51,10 @@ typedef struct _SARCH_BASE {
     /// Specific-purpose registers
 
     uint32_t ip;
-    uint32_t sp; // stack pointer
-    uint32_t bp; // base pointer
+    uint32_t sr; // Status register
+    uint32_t mfr; // Math flags register
+    uint32_t sp; // Stack pointer
+    uint32_t bp; // Base pointer
 
     /// General-purpose registers
 
@@ -59,5 +81,16 @@ typedef struct _SARCH_BASE {
     WritePort write_port;
 } SArch32;
 
+typedef void (*InstrFunc)(struct _SARCH_BASE* context);
+
+typedef struct {
+    const char* name;
+    const InstrFunc function;
+    const uint32_t clock_cycles;
+} Instruction;
+
 SArch32* SArch32_new(ReadFunc read, WriteFunc write);
+void SArch32_step_instruction(SArch32* sarch);
+void SArch32_step_clock(SArch32* sarch);
+bool SArch32_is_halted(SArch32* sarch);
 void SArch32_destroy(SArch32* sarch);
