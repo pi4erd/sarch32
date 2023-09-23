@@ -26,8 +26,9 @@ enum STATUS_FLAGS {
 };
 
 enum MATH_FLAGS {
-    M_OV = 1 << 0, // Overflow
+    M_OV = 1 << 0, // Overflow, signed math op overflows into sign bit
     M_CR = 1 << 1, // Carry
+    M_NG = 1 << 2, // Negative
 };
 
 typedef uint8_t (*ReadFunc)(uint32_t addr);
@@ -43,7 +44,7 @@ typedef struct _SARCH_BASE {
 
     /// Inaccessible registers (needed for implementation)
 
-    uint32_t ar0;
+    uint32_t ar0; // Used only for opcodes
     uint32_t ar1;
     uint32_t ar2;
     uint32_t ar3;
@@ -83,14 +84,24 @@ typedef struct _SARCH_BASE {
 
 typedef void (*InstrFunc)(struct _SARCH_BASE* context);
 
-typedef struct {
+typedef struct _SARCH32INST {
     const char* name;
     const InstrFunc function;
     const uint32_t clock_cycles;
+    const uint8_t fetch_cycles; // Used to determine amount of operands
+    /**
+     * @brief Fetch cycles:
+     * 0 - no operand
+     * 1 - 1 16 operand
+     * 2 - 2 16 operands
+     * 3 - 3 16 operands
+     * 4 - 4 16 operands
+     */
 } Instruction;
 
 SArch32* SArch32_new(ReadFunc read, WriteFunc write);
 void SArch32_step_instruction(SArch32* sarch);
 void SArch32_step_clock(SArch32* sarch);
 bool SArch32_is_halted(SArch32* sarch);
+bool SArch32_illegal(SArch32* sarch);
 void SArch32_destroy(SArch32* sarch);

@@ -4,7 +4,7 @@ project(sarch32 VERSION 0.1.0)
 
 include_directories(include)
 
-set(LIB_SOURCE src/sarch.c)
+set(LIB_SOURCE src/sarch.c src/sarch_fetch.c)
 set(C_SOURCE_FILES src/main.c)
 
 add_library(sarch ${LIB_SOURCE})
