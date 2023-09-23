@@ -11,6 +11,7 @@
 #endif
 
 #include "sarch_fetch.h"
+#include "macros.h"
 
 void set_flag(SArch32* sarch, uint32_t flag, bool value);
 uint32_t get_flag(SArch32* sarch, uint32_t flag);
@@ -114,8 +115,7 @@ void i_add(SArch32* context) {
 
     uint8_t reg0 = context->ar1 & 0xFF;
 
-    uint32_t num = FORM32((context->ar1 & 0xFFFF0000) >> 16, 
-                            context->ar2 & 0x0000FFFF);
+    uint32_t num = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
 
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -145,8 +145,7 @@ void loaddm(SArch32* context) {
 
     uint8_t reg0 = context->ar1 & 0x00FF;
 
-    uint32_t addr = FORM32((context->ar1 & 0xFFFF0000) >> 16, 
-                            context->ar2 & 0x0000FFFF);
+    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -163,8 +162,7 @@ void loaddi(SArch32* context) {
 
     uint8_t reg0 = context->ar1 & 0x00FF;
 
-    uint32_t num = FORM32((context->ar1 & 0xFFFF0000) >> 16, 
-                            context->ar2 & 0x0000FFFF);
+    uint32_t num = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -180,8 +178,7 @@ void m_add(SArch32* context) {
 
     uint8_t reg0 = context->ar1 & 0x00FF;
 
-    uint32_t addr = FORM32((context->ar1 & 0xFFFF0000) >> 16, 
-                            context->ar2 & 0x0000FFFF);
+    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -210,8 +207,7 @@ void loadbm(SArch32* context) {
 
     uint8_t reg0 = context->ar1 & 0x00FF;
 
-    uint32_t addr = FORM32((context->ar1 & 0xFFFF0000) >> 16, 
-                            context->ar2 & 0x0000FFFF);
+    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
     
     if((reg0  > sizeof(register_list) / sizeof(void*))) 
     {
@@ -245,13 +241,15 @@ void jmp(SArch32* context) {
     context->ip = addr;
 }
 
-void null_op(SArch32*) { TODO(); }
+void null_op(SArch32* context) {
+    TODO();
+}
 
 static const Instruction instructions[] = {
-    {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 1},
-    {"IADD", i_add, 3, 3}, {"LOADM DW", loaddm, 2, 3}, {"LOADI DW", loaddi, 1, 3},
-    {"MADD", m_add, 4, 3}, {"LOADM B", loadbm, 1, 3}, {"LOADI B", loadbi, 1, 1},
-    {"JMP", jmp, 2, 2}
+    {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 2},
+    {"IADD", i_add, 3, 5}, {"LOADM DW", loaddm, 2, 5}, {"LOADI DW", loaddi, 1, 5},
+    {"MADD", m_add, 4, 5}, {"LOADM B", loadbm, 1, 5}, {"LOADI B", loadbi, 1, 2},
+    {"JMP", jmp, 2, 4}
 };
 
 #pragma endregion
@@ -279,39 +277,14 @@ void SArch32_step_instruction(SArch32 *sarch)
     sarch->ar3 = 0;
 
     fetch_opcode(sarch);
-    uint16_t opc = (sarch->ar0 & 0xFFFF0000) >> 16;
+    uint16_t opc = (sarch->ar0 & 0x0000FFFF);
 
     if(opc >= sizeof(instructions) / sizeof(Instruction)) {
         HALT_ILLEGAL(sarch);
         return;
     }
 
-    switch (instructions[opc].fetch_cycles)
-    {
-    case 0:
-        break;
-    case 1:
-        fetch_operand16_0(sarch);
-        break;
-    case 2:
-        fetch_operand16_0(sarch);
-        fetch_operand16_1(sarch);
-        break;
-    case 3:
-        fetch_operand16_0(sarch);
-        fetch_operand16_1(sarch);
-        fetch_operand16_2(sarch);        
-        break;
-    case 4:
-        fetch_operand16_0(sarch);
-        fetch_operand16_1(sarch);
-        fetch_operand16_2(sarch);        
-        fetch_operand16_3(sarch);
-        break;
-    default:
-        HALT_ILLEGAL(sarch);
-        return;
-    }
+    fetch_operand8(sarch, instructions[opc].fetch_cycles);
 
     instructions[opc].function(sarch);
 
@@ -324,8 +297,8 @@ void SArch32_step_clock(SArch32 *sarch)
     if(get_flag(sarch, S_IL))
         return;
     
-    // get opcode w/o modifying IR
-    uint16_t opc = (READ16(sarch, sarch->ip) & 0xFFFF0000) >> 16;
+    // get opcode w/o modifying IP
+    uint16_t opc = (READ16(sarch, sarch->ip) & 0x0000FFFF);
 
     if(opc >= sizeof(instructions) / sizeof(Instruction)) {
         HALT_ILLEGAL(sarch);
@@ -335,7 +308,7 @@ void SArch32_step_clock(SArch32 *sarch)
     sarch->cycles++;
     sarch->total_cycles++;
 
-    if(sarch->cycles > instructions[opc].clock_cycles + instructions[opc].fetch_cycles) {
+    if(sarch->cycles >= instructions[opc].clock_cycles + instructions[opc].fetch_cycles) {
         SArch32_step_instruction(sarch);
         sarch->cycles = 0;
     }

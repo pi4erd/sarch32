@@ -70,12 +70,8 @@ int main() {
     ram.ptr = malloc(ram.size); // Allocate 1MiB
 
     const uint8_t program[] = {
-        0x08, 0x00, 0x00, 0x01, // loadbi
-        0x08, 0x00, 0x01, 0x02, // loadbi
-        0x08, 0x00, 0x02, 0x03, // loadbi
-        0x08, 0x00, 0x03, 0x04, // loadbi
-        0x07, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, // loadbm 4 <- 0
-        0x09, 0x00, 0x00, 0x00, 0x00, 0x00 // jmp 0
+        0x00, 0x00, // nop
+        0x01, 0x00  // halt
     };
 
     memcpy(ram.ptr, program, sizeof(program));
@@ -87,7 +83,7 @@ int main() {
         return 1;
     }
 
-    printf("0x%08x 0x%08x\n", cpu->r0, cpu->r1);
+    printf("%u cycles elapsed\n", cpu->total_cycles);
 
     SArch32_destroy(cpu);
 
