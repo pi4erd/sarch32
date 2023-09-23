@@ -38,6 +38,7 @@ typedef void (*WritePort)(uint8_t port, uint8_t data);
 
 typedef struct _SARCH_BASE {
     /// DATA FOR EMULATION
+
     uint32_t total_cycles;
     uint32_t cycles; // Spent on instruction
     bool log;
@@ -51,7 +52,7 @@ typedef struct _SARCH_BASE {
 
     /// Specific-purpose registers
 
-    uint32_t ip;
+    uint32_t ip; // Instruction pointer
     uint32_t sr; // Status register
     uint32_t mfr; // Math flags register
     uint32_t sp; // Stack pointer
@@ -76,10 +77,10 @@ typedef struct _SARCH_BASE {
     uint32_t r14;
     uint32_t r15;
 
+    /// Functions
+
     ReadFunc read;
     WriteFunc write;
-    ReadPort read_port;
-    WritePort write_port;
 } SArch32;
 
 typedef void (*InstrFunc)(struct _SARCH_BASE* context);
@@ -92,10 +93,11 @@ typedef struct _SARCH32INST {
     /**
      * @brief Fetch cycles:
      * 0 - no operand
-     * 1 - 1 16 operand
-     * 2 - 2 16 operands
-     * 3 - 3 16 operands
-     * 4 - 4 16 operands
+     * 1 - 1 byte
+     * 2 - 2 bytes
+     * 3 - 3 bytes
+     * and so on until
+     * 12 - 12 bytes (all argument registers ar1, ar2, ar3)
      */
 } Instruction;
 
