@@ -17,7 +17,7 @@
  */
 #define RANGE_CHECK(N, MIN, MAX) (N >= MIN && N < MAX)
 
-typedef struct {
+typedef struct _BYTARRAY {
     uint8_t* ptr;
     size_t size;
 } ByteArray;
@@ -70,8 +70,12 @@ int main() {
     ram.ptr = malloc(ram.size); // Allocate 1MiB
 
     const uint8_t program[] = {
-        0x00, 0x00, // nop
-        0x01, 0x00  // halt
+        0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x14, // loaddi bp 0x100
+        0x05, 0x00, 0x01, 0x02, 0x03, 0x04, 0x01, // loaddi r1 0x4030201
+        0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x13, // loaddi sp 0x100
+        0x0F, 0x00, 0x01, // push r1
+        0x10, 0x00, 0x02, // pop r2
+        0x01, 0x00 // halt
     };
 
     memcpy(ram.ptr, program, sizeof(program));

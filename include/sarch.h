@@ -20,15 +20,21 @@
 
 #define LIB_VERSION "0.1.0"
 
+// MAX 32 FLAGS
 enum STATUS_FLAGS {
     S_IL = 1 << 0, // Illegal
     S_HL = 1 << 1, // Halt
 };
 
+// MAX 32 FLAGS
 enum MATH_FLAGS {
     M_OV = 1 << 0, // Overflow, signed math op overflows into sign bit
     M_CR = 1 << 1, // Carry
     M_NG = 1 << 2, // Negative
+};
+
+enum INTERRUPTS {
+    I_STACK_INTEGRITY_ERROR = 0xF0
 };
 
 typedef uint8_t (*ReadFunc)(uint32_t addr);
@@ -55,6 +61,22 @@ typedef struct _SARCH_BASE {
     uint32_t ip; // Instruction pointer
     uint32_t sr; // Status register
     uint32_t mfr; // Math flags register
+
+    /**
+     * Stack is a data structure with bytes in it.
+     * The stack write in SArch32 works by, first, pushing to memory, then decreasing SP,
+     * The stack read in SArch32 works by, first, increasing SP, then reading from memory.
+     * 
+     * SArch32 inherently supports stack integrity check. Before popping anything 
+     * from the stack, checks if SP >= BP. If yes, sends interrupt number `0xF0`
+     * which is I_STACK_INTEGRITY_ERROR.
+     * 
+     * Unfortunately, SArch32 doesn't check for stack overflow, which means that
+     * the programmer will have to do checks themselves.
+     * 
+     * Data to stack is pushed in order: lo -> hi; and read in order: hi -> lo
+     */
+
     uint32_t sp; // Stack pointer
     uint32_t bp; // Base pointer
 
@@ -100,6 +122,8 @@ typedef struct _SARCH32INST {
      * 12 - 12 bytes (all argument registers ar1, ar2, ar3)
      */
 } Instruction;
+
+#define SIZE_OF_INSTRUCTION(FETCH_CYCLES) (2 + FETCH_CYCLES)
 
 SArch32* SArch32_new(ReadFunc read, WriteFunc write);
 void SArch32_step_instruction(SArch32* sarch);

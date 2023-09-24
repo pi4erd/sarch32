@@ -70,6 +70,10 @@ uint32_t get_mflag(SArch32* sarch, uint32_t flag);
         (uint8_t*)&context->r7 + 2, (uint8_t*)&context->r7 + 3, \
     }
 
+#define FORM_CONDITIONS() { \
+        M_OV, M_CR, M_NG \
+    }
+
 void _nop(SArch32* context) {
     asm inline("nop");
 }
@@ -113,9 +117,9 @@ void r_add(SArch32* context) {
 void i_add(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
-    uint8_t reg0 = context->ar1 & 0xFF;
+    uint32_t num = context->ar1;
 
-    uint32_t num = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
+    uint8_t reg0 = context->ar2 & 0xFF;
 
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -143,9 +147,9 @@ void i_add(SArch32* context) {
 void loaddm(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
-    uint8_t reg0 = context->ar1 & 0x00FF;
+    uint32_t addr = context->ar1;
 
-    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
+    uint8_t reg0 = context->ar2 & 0xFF;
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -160,9 +164,9 @@ void loaddm(SArch32* context) {
 void loaddi(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
-    uint8_t reg0 = context->ar1 & 0x00FF;
+    uint32_t num = context->ar1;
 
-    uint32_t num = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
+    uint8_t reg0 = context->ar2 & 0xFF;
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -176,9 +180,9 @@ void loaddi(SArch32* context) {
 void m_add(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
-    uint8_t reg0 = context->ar1 & 0x00FF;
+    uint32_t addr = context->ar1;
 
-    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
+    uint8_t reg0 = context->ar2 & 0xFF;
     
     if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
     {
@@ -205,9 +209,9 @@ void m_add(SArch32* context) {
 void loadbm(SArch32* context) {
     uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
 
-    uint8_t reg0 = context->ar1 & 0x00FF;
+    uint32_t addr = context->ar1;
 
-    uint32_t addr = ((context->ar1 & 0xFFFFFF00) >> 8) | (context->ar2 & 0xFF);
+    uint8_t reg0 = context->ar2 & 0xFF;
     
     if((reg0  > sizeof(register_list) / sizeof(void*))) 
     {
@@ -241,16 +245,90 @@ void jmp(SArch32* context) {
     context->ip = addr;
 }
 
+// A conditional far-pointer jump
+void jpc(SArch32* context) {
+    // Should be about 128 valid conditions, maybe
+    // First 64 conditions are: 32 math status positives, 32 math status negatives
+    // Second 64 conditions are: 32 sr positives, 32 sr negatives
+    // And last 128 mirrors first
+
+    const uint32_t conditions[] = FORM_CONDITIONS();
+
+    uint32_t addr = context->ar1;
+    uint8_t condition = context->ar2 & 0xFF;
+
+    if(condition / 64) {
+        if(get_flag(context, conditions[condition])) context->ip = addr;
+    } else {
+        if(get_mflag(context, conditions[condition])) context->ip = addr;
+    }
+}
+
+// An unconditional relative close-pointer jump
+// A jump instruction with signed 32 bit offset value
+// Relative address is calculated from the jump instruction opcode address in memory + offset
+void jpr(SArch32* context) {
+    uint32_t offset = context->ar1;
+
+    context->ip += offset - SIZE_OF_INSTRUCTION(4);
+}
+
+void jrc(SArch32* context) {
+    const uint32_t conditions[] = FORM_CONDITIONS();
+
+    uint32_t offset = context->ar1;
+    uint8_t condition = context->ar2 & 0xFF;
+
+    if(condition / 64) {
+        if(get_flag(context, conditions[condition]))
+            context->ip += offset - SIZE_OF_INSTRUCTION(5);
+    } else {
+        if(get_mflag(context, conditions[condition]))
+            context->ip += offset - SIZE_OF_INSTRUCTION(5);
+    }
+}
+
+// Pushes 32 bit register onto stack
+void push(SArch32* context) {
+    const uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+
+    // Look at what this expands to and be glad I wrote macros XD
+    PUSHSTACK32(context, *register_list[reg0]);
+}
+
+// Pops 32 bit register from stack
+void pop(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+    
+    uint8_t reg0 = context->ar1 & 0xFF;
+
+    if(context->sp + 4 > context->bp) {
+        fprintf(stderr, "I_STACK_INTEGRITY_ERROR\n");
+        TODO();
+    }
+
+    *register_list[reg0] = POPSTACK32(context);
+}
+
 void null_op(SArch32* context) {
     TODO();
 }
 
+ /// List of instructions. Instruction struct is as follows:
+ /// - Name of the instruction (UPPERCASE)
+ /// - Instruction function pointer with structure `void (*pointer)(SArch32*)`
+ /// - Clock cycles needed to execute the instruction (basically any number)
+ /// - Clock cycles needed to fetch the instruction's arguments (from 0 - 12 inclusive, HAS A FUNCTIONAL ROLE!)
 static const Instruction instructions[] = {
     {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 2},
     {"IADD", i_add, 3, 5}, {"LOADM DW", loaddm, 2, 5}, {"LOADI DW", loaddi, 1, 5},
     {"MADD", m_add, 4, 5}, {"LOADM B", loadbm, 1, 5}, {"LOADI B", loadbi, 1, 2},
-    {"JMP", jmp, 2, 4}
-};
+    {"JMP", jmp, 2, 4}, {"JPC", jpc, 3, 5}, {"CALL", null_op, 4, 4},
+    {"JPR", jpr, 2, 4}, {"JRC", null_op, 3, 5}, {"CALLR", null_op, 4, 4},
+    {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}
+}; // TODO: Add interrupts
 
 #pragma endregion
 
