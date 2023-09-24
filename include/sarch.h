@@ -31,6 +31,7 @@ enum MATH_FLAGS {
     M_OV = 1 << 0, // Overflow, signed math op overflows into sign bit
     M_CR = 1 << 1, // Carry
     M_NG = 1 << 2, // Negative
+    M_ZR = 1 << 3, // Zero
 };
 
 enum INTERRUPTS {

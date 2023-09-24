@@ -90,7 +90,7 @@ void r_add(SArch32* context) {
 
     if((reg0 > sizeof(register_list) / sizeof(void*)) || 
         (reg1 > sizeof(register_list) / sizeof(void*)) || 
-        (reg0 == 16) || (reg1 == 16)) 
+        (reg0 == 16))
     {
         HALT_ILLEGAL(context);
         return;
@@ -112,6 +112,7 @@ void r_add(SArch32* context) {
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
     set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
 }
 
 void i_add(SArch32* context) {
@@ -141,6 +142,7 @@ void i_add(SArch32* context) {
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
     set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
 }
 
 // Load double word from memory
@@ -204,6 +206,7 @@ void m_add(SArch32* context) {
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
     set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
 }
 
 void loadbm(SArch32* context) {
@@ -218,8 +221,8 @@ void loadbm(SArch32* context) {
         HALT_ILLEGAL(context);
         return;
     }
-
-    *register_list[reg0] = context->read(addr);
+    uint8_t tmp = READ8(context, addr);
+    *register_list[reg0] = tmp;
 }
 
 void loadbi(SArch32* context) {
@@ -312,6 +315,59 @@ void pop(SArch32* context) {
     *register_list[reg0] = POPSTACK32(context);
 }
 
+/**
+ * IP -> STACK
+ * AR1 -> IP
+ */
+void call(SArch32* context) {
+    PUSHSTACK32(context, context->ip);
+
+    uint32_t addr = context->ar1;
+
+    context->ip = addr;
+}
+
+/**
+ * IP -> STACK
+ * AR1 + (INSTRUCTION BASE) -> IP
+ */
+void callr(SArch32* context) {
+    PUSHSTACK32(context, context->ip);
+
+    uint32_t offset = context->ar1;
+
+    context->ip += offset - SIZE_OF_INSTRUCTION(4);
+}
+
+/**
+ * STACK -> IP
+ */
+void ret(SArch32* context) {
+    uint32_t addr = POPSTACK32(context);
+
+    context->ip = addr;
+}
+
+/**
+ * R[X] -> R[Y]
+ */
+void movr(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if ((reg0 > sizeof(register_list) / sizeof(void*)) || 
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16))
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] = *register_list[reg1];
+}
+
 void null_op(SArch32* context) {
     TODO();
 }
@@ -325,9 +381,10 @@ static const Instruction instructions[] = {
     {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 2},
     {"IADD", i_add, 3, 5}, {"LOADM DW", loaddm, 2, 5}, {"LOADI DW", loaddi, 1, 5},
     {"MADD", m_add, 4, 5}, {"LOADM B", loadbm, 1, 5}, {"LOADI B", loadbi, 1, 2},
-    {"JMP", jmp, 2, 4}, {"JPC", jpc, 3, 5}, {"CALL", null_op, 4, 4},
-    {"JPR", jpr, 2, 4}, {"JRC", null_op, 3, 5}, {"CALLR", null_op, 4, 4},
-    {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}
+    {"JMP", jmp, 2, 4}, {"JPC", jpc, 3, 5}, {"CALL", call, 4, 4},
+    {"JPR", jpr, 2, 4}, {"JRC", jrc, 3, 5}, {"CALLR", callr, 4, 4},
+    {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}, {"RET", ret, 4, 0},
+    {"MOVR", movr, 1, 2}
 }; // TODO: Add interrupts
 
 #pragma endregion

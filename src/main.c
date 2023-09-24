@@ -13,7 +13,6 @@
 
 /**
  * @brief A range check macro (min inclusive, max exclusive). True if in range
- * 
  */
 #define RANGE_CHECK(N, MIN, MAX) (N >= MIN && N < MAX)
 
@@ -32,9 +31,8 @@ uint8_t _read(uint32_t addr) {
 }
 
 void _write(uint32_t addr, uint8_t data) {
-    if(addr >= ram.size)
-        return;
-    ram.ptr[addr] = data;
+    if(RANGE_CHECK(addr, 0, ram.size))
+        ram.ptr[addr] = data;
 }
 
 void run_realistic() {
@@ -70,12 +68,8 @@ int main() {
     ram.ptr = malloc(ram.size); // Allocate 1MiB
 
     const uint8_t program[] = {
-        0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x14, // loaddi bp 0x100
-        0x05, 0x00, 0x01, 0x02, 0x03, 0x04, 0x01, // loaddi r1 0x4030201
-        0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x13, // loaddi sp 0x100
-        0x0F, 0x00, 0x01, // push r1
-        0x10, 0x00, 0x02, // pop r2
-        0x01, 0x00 // halt
+        0x07, 0x00, 0xFF, 0xFF, 0x10, 0x00, 0x01, // loadbm r01, 0xFFFFF // load end of ram
+        0x01, 0x00
     };
 
     memcpy(ram.ptr, program, sizeof(program));
@@ -88,6 +82,7 @@ int main() {
     }
 
     printf("%u cycles elapsed\n", cpu->total_cycles);
+    printf("%u\n", cpu->r0);
 
     SArch32_destroy(cpu);
 
