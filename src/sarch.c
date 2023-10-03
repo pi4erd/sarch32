@@ -14,9 +14,9 @@
 #include "macros.h"
 
 void set_flag(SArch32* sarch, uint32_t flag, bool value);
-uint32_t get_flag(SArch32* sarch, uint32_t flag);
+bool get_flag(SArch32* sarch, uint32_t flag);
 void set_mflag(SArch32* sarch, uint32_t flag, bool value);
-uint32_t get_mflag(SArch32* sarch, uint32_t flag);
+bool get_mflag(SArch32* sarch, uint32_t flag);
 
 void send_interrupt(SArch32* context, uint8_t code);
 
@@ -73,7 +73,11 @@ void send_interrupt(SArch32* context, uint8_t code);
     }
 
 #define FORM_CONDITIONS() { \
-        M_OV, M_CR, M_NG \
+        M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0, \
+        0, 0, 0, 0, 0, 0, 0, 0, \
+        0, 0, 0, 0, 0, 0, 0, 0, \
+        0, 0, 0, 0, 0, 0, 0, 0, \
+        M_OV, M_CR, M_NG, M_ZR, \
     }
 
 #define INTERRUPT_IRQ 0xFF
@@ -264,10 +268,16 @@ void jpc(SArch32* context) {
     uint32_t addr = context->ar1;
     uint8_t condition = context->ar2 & 0xFF;
 
+    bool neg = false;
+
+    if(condition / 32 % 2 != 0) {
+        neg = true;
+    }
+
     if(condition / 64) {
-        if(get_flag(context, conditions[condition])) context->ip = addr;
+        if(get_flag(context, conditions[condition]) != neg) context->ip = addr;
     } else {
-        if(get_mflag(context, conditions[condition])) context->ip = addr;
+        if(get_mflag(context, conditions[condition]) != neg) context->ip = addr;
     }
 }
 
@@ -277,7 +287,7 @@ void jpc(SArch32* context) {
 void jpr(SArch32* context) {
     uint32_t offset = context->ar1;
 
-    context->ip += offset - SIZE_OF_INSTRUCTION(4);
+    context->ip += offset - SIZE_OF_INSTRUCTION(0, 4);
 }
 
 void jrc(SArch32* context) {
@@ -286,12 +296,18 @@ void jrc(SArch32* context) {
     uint32_t offset = context->ar1;
     uint8_t condition = context->ar2 & 0xFF;
 
+    bool neg = false;
+
+    if(condition / 32 % 2 != 0) {
+        neg = true;
+    }
+
     if(condition / 64) {
-        if(get_flag(context, conditions[condition]))
-            context->ip += offset - SIZE_OF_INSTRUCTION(5);
+        if(get_flag(context, conditions[condition]) != neg)
+            context->ip += offset - SIZE_OF_INSTRUCTION(0, 5);
     } else {
-        if(get_mflag(context, conditions[condition]))
-            context->ip += offset - SIZE_OF_INSTRUCTION(5);
+        if(get_mflag(context, conditions[condition]) != neg)
+            context->ip += offset - SIZE_OF_INSTRUCTION(0, 5);
     }
 }
 
@@ -313,17 +329,20 @@ void pop(SArch32* context) {
 
     if(context->sp + 4 > context->bp) {
         fprintf(stderr, "I_STACK_INTEGRITY_ERROR\n");
-        TODO();
+        send_interrupt(context, I_STACK_INTEGRITY_ERROR);
+        return;
     }
 
     *register_list[reg0] = POPSTACK32(context);
 }
 
 /**
+ * SR -> STACK
  * IP -> STACK
  * AR1 -> IP
  */
 void call(SArch32* context) {
+    PUSHSTACK32(context, context->sr);
     PUSHSTACK32(context, context->ip);
 
     uint32_t addr = context->ar1;
@@ -332,24 +351,29 @@ void call(SArch32* context) {
 }
 
 /**
+ * SR -> STACK
  * IP -> STACK
  * AR1 + (INSTRUCTION BASE) -> IP
  */
 void callr(SArch32* context) {
+    PUSHSTACK32(context, context->sr);
     PUSHSTACK32(context, context->ip);
 
     uint32_t offset = context->ar1;
 
-    context->ip += offset - SIZE_OF_INSTRUCTION(4);
+    context->ip += offset - SIZE_OF_INSTRUCTION(0, 4);
 }
 
 /**
  * STACK -> IP
+ * STACK -> SR
  */
 void ret(SArch32* context) {
     uint32_t addr = POPSTACK32(context);
+    uint32_t status = POPSTACK32(context);
 
     context->ip = addr;
+    context->sr = status;
 }
 
 /**
@@ -404,6 +428,18 @@ void movrb(SArch32* context) {
     *register_list[reg0] = *register_list[reg1];
 }
 
+void intr(SArch32* context) {
+    uint8_t code = context->ar1 & 0xFF;
+
+    if(code == 0xFF || code == 0xFE)
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    send_interrupt(context, code);
+}
+
 void null_op(SArch32* context) {
     TODO();
 }
@@ -421,7 +457,8 @@ static const Instruction instructions[] = {
     {"JPR", jpr, 2, 4}, {"JRC", jrc, 3, 5}, {"CALLR", callr, 4, 4},
     {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}, {"RET", ret, 4, 0},
     {"MOVR DW", movrd, 1, 2}, {"MOVR W", movrw, 1, 2}, {"MOVR B", movrb, 1, 2},
-}; // TODO: Add interrupts
+    {"INT", intr, 4, 1}
+};
 
 #pragma endregion
 
@@ -450,6 +487,9 @@ void SArch32_step_instruction(SArch32 *sarch)
     fetch_opcode(sarch);
     uint16_t opc = (sarch->ar0 & 0x0000FFFF);
 
+    if(!(opc & 0x80))
+        opc &= 0xFF;
+
     if(opc >= sizeof(instructions) / sizeof(Instruction)) {
         HALT_ILLEGAL(sarch);
         return;
@@ -469,7 +509,13 @@ void SArch32_step_clock(SArch32 *sarch)
         return;
     
     // get opcode w/o modifying IP
-    uint16_t opc = (READ16(sarch, sarch->ip) & 0x0000FFFF);
+    fetch_opcode(sarch);
+    uint16_t opc = sarch->ar0 & 0xFFFF;
+
+    sarch->ip--;
+    if(opc & 0x80) {
+        sarch->ip--;
+    }
 
     if(opc >= sizeof(instructions) / sizeof(Instruction)) {
         HALT_ILLEGAL(sarch);
@@ -491,6 +537,25 @@ void SArch32_step_clock(SArch32 *sarch)
         fprintf(stderr, "Error occured while trying to nanosleep!\n");
         exit(1);
     }
+}
+
+void SArch32_reset(SArch32 *sarch)
+{
+    sarch->ar0 = 0;
+    sarch->ar1 = 0;
+    sarch->ar2 = 0;
+    sarch->ar3 = 0;
+
+    sarch->sp = 0;
+    sarch->bp = 0;
+
+    sarch->sr = 0;
+    sarch->mfr = 0;
+
+    sarch->ip = 0;
+
+    sarch->total_cycles = 0;
+    sarch->cycles = 0;
 }
 
 bool SArch32_is_halted(SArch32 *sarch)
@@ -517,9 +582,11 @@ void set_flag(SArch32 *sarch, uint32_t flag, bool value)
     }
 }
 
-uint32_t get_flag(SArch32 *sarch, uint32_t flag)
+bool get_flag(SArch32 *sarch, uint32_t flag)
 {
-    return sarch->sr & flag;
+    if(sarch->sr & flag)
+        return 1;
+    else return 0;
 }
 
 void set_mflag(SArch32 *sarch, uint32_t flag, bool value)
@@ -531,14 +598,26 @@ void set_mflag(SArch32 *sarch, uint32_t flag, bool value)
     }
 }
 
-uint32_t get_mflag(SArch32 *sarch, uint32_t flag)
+bool get_mflag(SArch32 *sarch, uint32_t flag)
 {
-    return sarch->mfr & flag;
+    if(sarch->mfr & flag)
+        return 1;
+    else return 0;
 }
 
 void send_interrupt(SArch32 *context, uint8_t code)
 {
-    TODO();
+    // FIXME: Maybe find a way to make interrupts better? I don't know yet. Testing will show
+    uint32_t addr = (uint32_t)code * 4 + INTERRUPT_TABLE_ADDR;
+
+    if(code != NMI && !get_flag(context, S_ID)) {
+        return;
+    }
+
+    PUSHSTACK32(context, context->sr);
+    PUSHSTACK32(context, context->ip);
+
+    context->ip = addr;
 }
 
 #pragma endregion

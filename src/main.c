@@ -68,7 +68,10 @@ int main() {
     ram.ptr = malloc(ram.size); // Allocate 1MiB
 
     const uint8_t program[] = {
-        
+        0x05, 0x0A, 0x00, 0x00, 0x00, 0x00, // loaddi 10 -> r0
+        0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, // addi -1 -> r0
+        0x0D, 0xFA, 0xFF, 0xFF, 0xFF, 0x23, // jpc 0 if m_zero
+        0x01, // halt
     };
 
     memcpy(ram.ptr, program, sizeof(program));

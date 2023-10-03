@@ -21,7 +21,9 @@ void fetch_opcode1(SArch32 *sarch)
 void fetch_opcode(SArch32 *sarch)
 {
     fetch_opcode0(sarch);
-    fetch_opcode1(sarch);
+
+    if(sarch->ar0 & 0x80)
+        fetch_opcode1(sarch);
 }
 
 #define INT_NUM_BITS 32

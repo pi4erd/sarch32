@@ -10,6 +10,7 @@
  * SArch32 - simple architecture 32 bit
  * Now that I use 32 bits, I can access up to 4GB of memory!
  * 
+ * CPU always starts at address 0
  */
 #pragma once
 
@@ -24,6 +25,7 @@
 enum STATUS_FLAGS {
     S_IL = 1 << 0, // Illegal
     S_HL = 1 << 1, // Halt
+    S_ID = 1 << 2, // Interrupt Disabled
 };
 
 // MAX 32 FLAGS
@@ -34,8 +36,26 @@ enum MATH_FLAGS {
     M_ZR = 1 << 3, // Zero
 };
 
+/**
+ * Interrupts are sent using special 1-byte code
+ * Interrupt vector table has 256 addresses, or 1024 bytes of data
+ * Interrupt vector space is addressed using 1-byte code
+ * 
+ * There are 2 special hardware interrupts for code 0xFE (IRQ) and 0xFF (NMI)
+ * 
+ * 0xFF (NMI) is the only non-maskable interrupt that interrupts no matter if
+ * S_ID is set or not.
+ * 
+ * Interrupt table is located in last 1024 bytes of address space (0xFFFFFC00)
+ * 
+ */
+
+#define INTERRUPT_TABLE_ADDR 0xFFFFFC00
+
 enum INTERRUPTS {
-    I_STACK_INTEGRITY_ERROR = 0xF0
+    I_STACK_INTEGRITY_ERROR = 0xF0,
+    IRQ = 0xFE,
+    NMI = 0xFF,
 };
 
 typedef uint8_t (*ReadFunc)(uint32_t addr);
@@ -124,11 +144,13 @@ typedef struct _SARCH32INST {
      */
 } Instruction;
 
-#define SIZE_OF_INSTRUCTION(FETCH_CYCLES) (2 + FETCH_CYCLES)
+#define SIZE_OF_INSTRUCTION(INSTRUCTION_OPCODE, FETCH_CYCLES) \
+    ((INSTRUCTION_OPCODE & 0x80 ? 2 : 1) + FETCH_CYCLES)
 
 SArch32* SArch32_new(ReadFunc read, WriteFunc write);
 void SArch32_step_instruction(SArch32* sarch);
 void SArch32_step_clock(SArch32* sarch);
+void SArch32_reset(SArch32* sarch);
 bool SArch32_is_halted(SArch32* sarch);
 bool SArch32_illegal(SArch32* sarch);
 void SArch32_destroy(SArch32* sarch);
