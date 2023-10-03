@@ -68,8 +68,7 @@ int main() {
     ram.ptr = malloc(ram.size); // Allocate 1MiB
 
     const uint8_t program[] = {
-        0x07, 0x00, 0xFF, 0xFF, 0x10, 0x00, 0x01, // loadbm r01, 0xFFFFF // load end of ram
-        0x01, 0x00
+        
     };
 
     memcpy(ram.ptr, program, sizeof(program));
@@ -82,7 +81,6 @@ int main() {
     }
 
     printf("%u cycles elapsed\n", cpu->total_cycles);
-    printf("%u\n", cpu->r0);
 
     SArch32_destroy(cpu);
 

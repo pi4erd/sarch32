@@ -18,6 +18,8 @@ uint32_t get_flag(SArch32* sarch, uint32_t flag);
 void set_mflag(SArch32* sarch, uint32_t flag, bool value);
 uint32_t get_mflag(SArch32* sarch, uint32_t flag);
 
+void send_interrupt(SArch32* context, uint8_t code);
+
 #define HALT_ILLEGAL(CPU) (set_flag(CPU, S_HL, true), set_flag(CPU, S_IL, true))
 #define ASSERT_EQUALS(A, B) (if(A != B) { fprintf(stderr, "ASSERT_EQUALS FAILED!"); exit(-1); })
 
@@ -74,6 +76,9 @@ uint32_t get_mflag(SArch32* sarch, uint32_t flag);
         M_OV, M_CR, M_NG \
     }
 
+#define INTERRUPT_IRQ 0xFF
+#define INTERRUPT_IMM 0xF
+
 void _nop(SArch32* context) {
     asm inline("nop");
 }
@@ -103,11 +108,10 @@ void r_add(SArch32* context) {
 
     *register_list[reg0] += *register_list[reg1];
 
-    // TODO: NEEDS TESTING
     set_mflag(context, M_CR, (tmp > *register_list[reg0]) && 
                         (*register_list[reg1] > *register_list[reg0]));
 
-    set_mflag(context, M_NG, *(register_list[reg0]) & 0x80000000 != 0);
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
 
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
@@ -137,7 +141,7 @@ void i_add(SArch32* context) {
 
     set_mflag(context, M_CR, (tmp > *register_list[reg0]) && (num > *register_list[reg0]));
 
-    set_mflag(context, M_NG, *(register_list[reg0]) & 0x80000000 != 0);
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
 
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
@@ -201,7 +205,7 @@ void m_add(SArch32* context) {
     *register_list[reg0] += num;
 
     set_mflag(context, M_CR, (tmp > *register_list[reg0]) && (num > *register_list[reg0]));
-    set_mflag(context, M_NG, *(register_list[reg0]) & 0x80000000 != 0);
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
 
     carry ^= (*(register_list[reg0]) & 0x80000000);
 
@@ -351,7 +355,7 @@ void ret(SArch32* context) {
 /**
  * R[X] -> R[Y]
  */
-void movr(SArch32* context) {
+void movrd(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
     uint8_t reg0 = context->ar1 & 0xFF;
@@ -360,6 +364,38 @@ void movr(SArch32* context) {
     if ((reg0 > sizeof(register_list) / sizeof(void*)) || 
         (reg1 > sizeof(register_list) / sizeof(void*)) ||
         (reg0 == 16))
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] = *register_list[reg1];
+}
+
+void movrw(SArch32* context) {
+    uint16_t* register_list[] = FORM_REGISTER_LIST16(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if ((reg0 > sizeof(register_list) / sizeof(void*)) || 
+        (reg1 > sizeof(register_list) / sizeof(void*)))
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] = *register_list[reg1];
+}
+
+void movrb(SArch32* context) {
+    uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if ((reg0 > sizeof(register_list) / sizeof(void*)) || 
+        (reg1 > sizeof(register_list) / sizeof(void*)))
     {
         HALT_ILLEGAL(context);
         return;
@@ -384,7 +420,7 @@ static const Instruction instructions[] = {
     {"JMP", jmp, 2, 4}, {"JPC", jpc, 3, 5}, {"CALL", call, 4, 4},
     {"JPR", jpr, 2, 4}, {"JRC", jrc, 3, 5}, {"CALLR", callr, 4, 4},
     {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}, {"RET", ret, 4, 0},
-    {"MOVR", movr, 1, 2}
+    {"MOVR DW", movrd, 1, 2}, {"MOVR W", movrw, 1, 2}, {"MOVR B", movrb, 1, 2},
 }; // TODO: Add interrupts
 
 #pragma endregion
@@ -498,6 +534,11 @@ void set_mflag(SArch32 *sarch, uint32_t flag, bool value)
 uint32_t get_mflag(SArch32 *sarch, uint32_t flag)
 {
     return sarch->mfr & flag;
+}
+
+void send_interrupt(SArch32 *context, uint8_t code)
+{
+    TODO();
 }
 
 #pragma endregion
