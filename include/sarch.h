@@ -17,9 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define CAST_TO_FLOAT(U) *(float*)&U
-
-#define LIB_VERSION "0.1.0"
+#define LIB_VERSION "0.2.0"
 
 // MAX 32 FLAGS
 enum STATUS_FLAGS {
@@ -50,10 +48,9 @@ enum MATH_FLAGS {
  * 
  */
 
-#define INTERRUPT_TABLE_ADDR 0xFFFFFC00
-
 enum INTERRUPTS {
     I_STACK_INTEGRITY_ERROR = 0xF0,
+    MATH_OPERATION_ILLEGAL = 0xF1,
     IRQ = 0xFE,
     NMI = 0xFF,
 };
@@ -82,6 +79,7 @@ typedef struct _SARCH_BASE {
     uint32_t ip; // Instruction pointer
     uint32_t sr; // Status register
     uint32_t mfr; // Math flags register
+    uint32_t tptr; // Interrupt table pointer
 
     /**
      * Stack is a data structure with bytes in it.

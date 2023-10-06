@@ -1,3 +1,5 @@
+#pragma region Includes
+
 #include <sarch.h>
 
 #include <stdio.h>
@@ -13,15 +15,22 @@
 #include "sarch_fetch.h"
 #include "macros.h"
 
+#pragma endregion
+
+#pragma region Decls and defs
+
 void set_flag(SArch32* sarch, uint32_t flag, bool value);
 bool get_flag(SArch32* sarch, uint32_t flag);
 void set_mflag(SArch32* sarch, uint32_t flag, bool value);
 bool get_mflag(SArch32* sarch, uint32_t flag);
 
 void send_interrupt(SArch32* context, uint8_t code);
+//void update_matflags(SArch32* context, uint32_t old); // TODO: Implement update matflags for ADD and SUB
 
 #define HALT_ILLEGAL(CPU) (set_flag(CPU, S_HL, true), set_flag(CPU, S_IL, true))
 #define ASSERT_EQUALS(A, B) (if(A != B) { fprintf(stderr, "ASSERT_EQUALS FAILED!"); exit(-1); })
+
+#pragma endregion
 
 #pragma region Instruction Functions
 
@@ -31,7 +40,7 @@ void send_interrupt(SArch32* context, uint8_t code);
         &context->r8, &context->r9, &context->r10, &context->r11, \
         &context->r12, &context->r13, &context->r14, &context->r15, \
         &context->ip, &context->sr, &context->mfr, &context->sp, \
-        &context->bp, \
+        &context->bp, &context->tptr\
     }
 
 #define FORM_REGISTER_LIST16(context) { \
@@ -377,7 +386,7 @@ void ret(SArch32* context) {
 }
 
 /**
- * R[X] -> R[Y]
+ * R[X] <- R[Y]
  */
 void movrd(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
@@ -440,24 +449,381 @@ void intr(SArch32* context) {
     send_interrupt(context, code);
 }
 
+void i_sub(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t num = context->ar1;
+
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    uint32_t carry = ((*(register_list[reg0]) & 0x80000000) & 
+        (num & 0x80000000));
+
+    uint32_t tmp = *register_list[reg0];
+
+    *register_list[reg0] -= num;
+
+    // TODO: Implement carry check for SUB
+    //set_mflag(context, M_CR, (tmp > *register_list[reg0]) && (num > *register_list[reg0]));
+
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
+
+    carry ^= (*(register_list[reg0]) & 0x80000000);
+
+    set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
+}
+
+void m_sub(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t addr = context->ar1;
+
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    uint32_t num = READ32(context, addr);
+
+    uint32_t carry = ((*(register_list[reg0]) & 0x80000000) & 
+        (num & 0x80000000));
+
+    uint32_t tmp = *register_list[reg0];
+
+    *register_list[reg0] -= num;
+
+    // TODO: Implement carry check for SUB
+    //set_mflag(context, M_CR, (tmp > *register_list[reg0]) && (num > *register_list[reg0]));
+
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
+
+    carry ^= (*(register_list[reg0]) & 0x80000000);
+
+    set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
+}
+
+void r_sub(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar2 & 0xFF;
+    uint8_t reg1 = context->ar2 & 0xFF00;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    uint32_t carry = ((*(register_list[reg0]) & 0x80000000) & 
+        (*register_list[reg1] & 0x80000000));
+
+    uint32_t tmp = *register_list[reg0];
+
+    *register_list[reg0] -= *register_list[reg1];
+
+    // TODO: Implement carry check for SUB
+    //set_mflag(context, M_CR, (tmp > *register_list[reg0]) && (num > *register_list[reg0]));
+
+    set_mflag(context, M_NG, (*register_list[reg0] & 0x80000000) != 0);
+
+    carry ^= (*(register_list[reg0]) & 0x80000000);
+
+    set_mflag(context, M_OV, carry);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
+}
+
+// Negate integer register
+void ngi(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) || (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    if(*register_list[reg0] == 0x80000000) {
+        set_mflag(context, M_OV, 1);
+        return;
+    }
+
+    *register_list[reg0] = -*register_list[reg0];
+
+    set_mflag(context, M_NG, *register_list[reg0] & 0x80000000);
+    set_mflag(context, M_ZR, *register_list[reg0] == 0);
+}
+
+// Multiply signed double word registers
+void r_mulsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = context->ar1 & 0xFF00;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] *= *register_list[reg1];
+
+    // XXX: Do I use flags with multiply instructions?
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+// Divide signed double word registers
+void r_divsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = context->ar1 & 0xFF00;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] /= *register_list[reg1];
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+// Multiply unsigned double word registers
+void r_mulud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = context->ar1 & 0xFF00;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] *= *register_list[reg1];
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+// Divide unsigned double word registers
+void r_divud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+    uint8_t reg1 = context->ar1 & 0xFF00;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1 > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+    
+    *register_list[reg0] /= *register_list[reg1];
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+void i_mulsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    int32_t num = context->ar1;
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] *= num;
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+void i_divsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    int32_t num = context->ar1;
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] /= num;
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+void i_mulud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t num = context->ar1;
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] *= num;
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+} 
+
+void i_divud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t num = context->ar1;
+    uint8_t reg0 = context->ar2 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg0] /= num;
+
+    set_mflag(context, M_OV, false);
+    set_mflag(context, M_CR, false);
+}
+
+// Convert signed double word to float (int -> float)
+void cvsdf(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    float value = (float)*register_list[reg0];
+
+    *register_list[reg0] = CAST_TO_TYPE(value, int32_t);
+}
+
+// Convert float to signed double word
+void cvfsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = context->ar1 & 0xFF;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16)) 
+    {
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    float value = CAST_TO_FLOAT(*register_list[reg0]);
+
+    *register_list[reg0] = (int32_t)value;
+}
+
+// Disable interrupts
+void dsin(SArch32* context) {
+    set_flag(context, S_ID, true);
+}
+
+// Enable interrupts
+void esin(SArch32* context) {
+    set_flag(context, S_ID, false);
+}
+
 void null_op(SArch32* context) {
     TODO();
 }
+
+void illegal(SArch32* context) {
+    HALT_ILLEGAL(context);
+}
+
+const Instruction NULL_INSTR = {"ILLXINSTERRI", illegal, 0, 0};
 
  /// List of instructions. Instruction struct is as follows:
  /// - Name of the instruction (UPPERCASE)
  /// - Instruction function pointer with structure `void (*pointer)(SArch32*)`
  /// - Clock cycles needed to execute the instruction (basically any number)
  /// - Clock cycles needed to fetch the instruction's arguments (from 0 - 12 inclusive, HAS A FUNCTIONAL ROLE!)
+ /// Instructions with opcode >128 take at least 2 bytes
 static const Instruction instructions[] = {
+    // 0 0x0
     {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 2},
     {"IADD", i_add, 3, 5}, {"LOADM DW", loaddm, 2, 5}, {"LOADI DW", loaddi, 1, 5},
+
+    // 6 0x6
     {"MADD", m_add, 4, 5}, {"LOADM B", loadbm, 1, 5}, {"LOADI B", loadbi, 1, 2},
     {"JMP", jmp, 2, 4}, {"JPC", jpc, 3, 5}, {"CALL", call, 4, 4},
+    
+    // 12 0xC
     {"JPR", jpr, 2, 4}, {"JRC", jrc, 3, 5}, {"CALLR", callr, 4, 4},
     {"PUSH", push, 4, 1}, {"POP", pop, 4, 1}, {"RET", ret, 4, 0},
+
+    // 18 0x12
     {"MOVR DW", movrd, 1, 2}, {"MOVR W", movrw, 1, 2}, {"MOVR B", movrb, 1, 2},
-    {"INT", intr, 4, 1}
+    {"INT", intr, 4, 1}, {"ISUB", i_sub, 3, 5}, {"MSUB", m_sub, 4, 5},
+    
+    // 24 0x18
+    {"RSUB", r_sub, 3, 2}, {"NGI", ngi, 2, 1}, {"RMULSD", r_mulsd, 6, 2},
+    {"RDIVSD", r_divsd, 7, 2}, {"RMULUD", r_mulud, 6, 2}, {"RDIVUD", r_divud, 7, 2},
+
+    // 30 0x1E
+    {"IMULSD", i_mulsd, 6, 5}, {"IDIVSD", i_divsd, 7, 5}, {"IMULUD", i_mulud, 6, 5},
+    {"IDIVUD", i_divud, 7, 5}, {"CVSDF", cvsdf, 5, 1}, {"CVFSD", cvfsd, 7, 1},
+
+    // 36 0x24 // TODO: Implement comparison instructions
+    {"ICMPSD", null_op, 3, 5}, {"ICMPUD", null_op, 3, 5}, {"ICMPUB", null_op, 2, 2},
+    {"ICMPUW", null_op, 2, 3}, {"RCMPSD", null_op, 2, 2}, {"RCMPUD", null_op, 2, 2},
+
+    // 42 0x2A
+    {"RCMPUB", null_op, 2, 2}, {"RCMPUW", null_op, 2, 2}, {"DSIN", dsin, 1, 0},
+    {"ESIN", esin, 1, 0}
 };
 
 #pragma endregion
@@ -470,6 +836,10 @@ SArch32 *SArch32_new(ReadFunc read, WriteFunc write)
 
     result->read = read;
     result->write = write;
+
+    SArch32_reset(result);
+
+    result->log = 0;
 
     return result;
 }
@@ -608,7 +978,7 @@ bool get_mflag(SArch32 *sarch, uint32_t flag)
 void send_interrupt(SArch32 *context, uint8_t code)
 {
     // FIXME: Maybe find a way to make interrupts better? I don't know yet. Testing will show
-    uint32_t addr = (uint32_t)code * 4 + INTERRUPT_TABLE_ADDR;
+    uint32_t addr = (uint32_t)code * 4 + context->tptr;
 
     if(code != NMI && !get_flag(context, S_ID)) {
         return;

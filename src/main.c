@@ -46,7 +46,7 @@ void run_realistic() {
 void run_simulated() {
     if(!cpu) return;
 
-    struct timespec remaining, request = { 0, 10000000 };
+    struct timespec remaining, request = { 0, 100000 };
 
     while(!SArch32_is_halted(cpu)) {
         SArch32_step_instruction(cpu);
@@ -69,8 +69,7 @@ int main() {
 
     const uint8_t program[] = {
         0x05, 0x0A, 0x00, 0x00, 0x00, 0x00, // loaddi 10 -> r0
-        0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, // addi -1 -> r0
-        0x0D, 0xFA, 0xFF, 0xFF, 0xFF, 0x23, // jpc 0 if m_zero
+        0x22, 0x00, // cvsdf (uint32_t)r0 -> (float)r0
         0x01, // halt
     };
 

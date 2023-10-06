@@ -5,8 +5,10 @@ project(sarch32 VERSION 0.1.0)
 include_directories(include)
 
 set(LIB_SOURCE src/sarch.c src/sarch_fetch.c)
-set(C_SOURCE_FILES src/main.c)
 
 add_library(sarch ${LIB_SOURCE})
-add_executable(${PROJECT_NAME} ${C_SOURCE_FILES})
+add_executable(test_exec src/main.c)
+target_link_libraries(test_exec sarch)
+
+add_executable(${PROJECT_NAME} src/computer_main.cpp src/computer.cpp)
 target_link_libraries(${PROJECT_NAME} sarch)

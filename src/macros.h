@@ -23,3 +23,7 @@
 #define FORM16(A, B)                ((uint16_t)(A) | ((uint16_t)(B) << 8))
 #define FORM32_8(A, B, C, D)        (FORM32_16(FORM_16(A, B), FORM_16(C, D)))
 #define TODO()                      (fprintf(stderr, "NOT YET IMPLEMENTED\n"), exit(2))
+
+#define CAST_TO_FLOAT(U)            *(float*)&U
+#define CAST_TO_UINT(F)             *(uint32_t*)&F
+#define CAST_TO_TYPE(V, T)          *(T*)&V
