@@ -81,16 +81,27 @@ void send_interrupt(SArch32* context, uint8_t code);
         (uint8_t*)&context->r7 + 2, (uint8_t*)&context->r7 + 3, \
     }
 
-#define FORM_CONDITIONS() { \
-        M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0, \
-        0, 0, 0, 0, 0, 0, 0, 0, \
-        0, 0, 0, 0, 0, 0, 0, 0, \
-        0, 0, 0, 0, 0, 0, 0, 0, \
-        M_OV, M_CR, M_NG, M_ZR, \
-    }
-
 #define INTERRUPT_IRQ 0xFF
 #define INTERRUPT_IMM 0xF
+
+static uint32_t conditions[128] = {
+    M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    S_IL, S_HL, S_ID, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    S_IL, S_HL, S_ID, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+};
 
 void _nop(SArch32* context) {
     asm inline("nop");
@@ -272,8 +283,6 @@ void jpc(SArch32* context) {
     // Second 64 conditions are: 32 sr positives, 32 sr negatives
     // And last 128 mirrors first
 
-    const uint32_t conditions[] = FORM_CONDITIONS();
-
     uint32_t addr = context->ar1;
     uint8_t condition = context->ar2 & 0xFF;
 
@@ -300,8 +309,6 @@ void jpr(SArch32* context) {
 }
 
 void jrc(SArch32* context) {
-    const uint32_t conditions[] = FORM_CONDITIONS();
-
     uint32_t offset = context->ar1;
     uint8_t condition = context->ar2 & 0xFF;
 
