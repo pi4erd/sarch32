@@ -30,10 +30,6 @@ void send_interrupt(SArch32* context, uint8_t code);
 #define HALT_ILLEGAL(CPU) (set_flag(CPU, S_HL, true), set_flag(CPU, S_IL, true))
 #define ASSERT_EQUALS(A, B) (if(A != B) { fprintf(stderr, "ASSERT_EQUALS FAILED!"); exit(-1); })
 
-#pragma endregion
-
-#pragma region Instruction Functions
-
 #define FORM_REGISTER_LIST32(context) { \
         &context->r0, &context->r1, &context->r2, &context->r3, \
         &context->r4, &context->r5, &context->r6, &context->r7, \
@@ -102,6 +98,10 @@ static uint32_t conditions[128] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
 };
+
+#pragma endregion
+
+#pragma region Instruction Functions
 
 void _nop(SArch32* context) {
     asm inline("nop");
@@ -332,7 +332,7 @@ void push(SArch32* context) {
     const uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
     uint8_t reg0 = context->ar1 & 0xFF;
-
+    
     // Look at what this expands to and be glad I wrote macros XD
     PUSHSTACK32(context, *register_list[reg0]);
 }
@@ -342,12 +342,6 @@ void pop(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
     
     uint8_t reg0 = context->ar1 & 0xFF;
-
-    if(context->sp + 4 > context->bp) {
-        fprintf(stderr, "I_STACK_INTEGRITY_ERROR\n");
-        send_interrupt(context, I_STACK_INTEGRITY_ERROR);
-        return;
-    }
 
     *register_list[reg0] = POPSTACK32(context);
 }

@@ -49,7 +49,6 @@ enum MATH_FLAGS {
  */
 
 enum INTERRUPTS {
-    I_STACK_INTEGRITY_ERROR = 0xF0,
     MATH_OPERATION_ILLEGAL = 0xF1,
     IRQ = 0xFE,
     NMI = 0xFF,
@@ -85,13 +84,6 @@ typedef struct _SARCH_BASE {
      * Stack is a data structure with bytes in it.
      * The stack write in SArch32 works by, first, pushing to memory, then decreasing SP,
      * The stack read in SArch32 works by, first, increasing SP, then reading from memory.
-     * 
-     * SArch32 inherently supports stack integrity check. Before popping anything 
-     * from the stack, checks if SP >= BP. If yes, sends interrupt number `0xF0`
-     * which is I_STACK_INTEGRITY_ERROR.
-     * 
-     * Unfortunately, SArch32 doesn't check for stack overflow, which means that
-     * the programmer will have to do checks themselves.
      * 
      * Data to stack is pushed in order: lo -> hi; and read in order: hi -> lo
      */
