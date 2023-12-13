@@ -1069,6 +1069,57 @@ void stptrw(SArch32* context) {
     WRITE16(context, *register32_list[reg1], *register16_list[reg0]);
 }
 
+// Store dw at absolute location
+// M[A] <- R0
+void stmd(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t addr = context->ar1;
+    uint8_t reg = context->ar2 & 0xFF;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)) ||
+        (reg == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE32(context, addr, *register_list[reg]);
+}
+
+void stmb(SArch32* context) {
+    uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
+
+    uint32_t addr = context->ar1;
+    uint8_t reg = context->ar2 & 0xFF;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE8(context, addr, *register_list[reg]);
+}
+
+void stmw(SArch32* context) {
+    uint16_t* register_list[] = FORM_REGISTER_LIST16(context);
+
+    uint32_t addr = context->ar1;
+    uint8_t reg = context->ar2 & 0xFF;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE16(context, addr, *register_list[reg]);
+}
+
 void null_op(SArch32* context) {
     TODO();
 }
@@ -1120,7 +1171,10 @@ static const Instruction instructions[] = {
 
     // 48 0x30
     {"LDPTRW", ldptrw, 3, 2}, {"STPTRD", stptrd, 4, 2}, {"STPTRB", stptrb, 2, 2},
-    {"STPTRW", stptrw, 2, 2}
+    {"STPTRW", stptrw, 2, 2}, {"STMD", stmd, 4, 5}, {"STMB", stmb, 2, 5},
+
+    // 54 0x36
+    {"STMW", stmw, 3, 5}
 };
 
 #pragma endregion
