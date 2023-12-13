@@ -1,3 +1,5 @@
+#define N_DEBUG
+
 #include "computer.hpp"
 
 #include <iostream>
@@ -35,10 +37,19 @@ int main() {
     load_bios();
 
     SArch32* cpu = SArch32_new(read_devices, write_devices);
-    cpu->log = true;
+    cpu->log = false;
 
     while(!SArch32_is_halted(cpu)) {
+#ifndef _DEBUG
         SArch32_step_clock(cpu);
+#else
+        SArch32_step_instruction(cpu);
+        getc(stdin);
+#endif
+    }
+
+    if(SArch32_illegal(cpu)) {
+        printf("\nIllegal instruction reached!\n");
     }
 
     printf("Stopped execution at %u steps!\n", cpu->total_cycles);

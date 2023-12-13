@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
+set(CMAKE_CXX_STANDARD 11)
+
 project(sarch32 VERSION 0.1.0)
 
 include_directories(include)

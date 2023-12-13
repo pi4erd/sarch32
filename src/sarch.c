@@ -256,9 +256,8 @@ void loadbm(SArch32* context) {
 void loadbi(SArch32* context) {
     uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
 
-    uint8_t reg0 = context->ar1 & 0x00FF;
-
-    uint8_t num = (context->ar1 & 0x0000FF00) >> 8;
+    uint8_t num = (context->ar1 & 0x000000FF);
+    uint8_t reg0 = (context->ar1 & 0xFF00) >> 8;
     
     if((reg0  > sizeof(register_list) / sizeof(void*))) 
     {
@@ -955,66 +954,8 @@ void esin(SArch32* context) {
 }
 
 // load from pointer at register into register
-// M[R1] <- R0
-void ldptrd(SArch32* context) {
-    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
-
-    uint8_t reg0 = (context->ar1 & 0xFF);
-    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
-
-    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
-        (reg1  > sizeof(register_list) / sizeof(void*)) ||
-        (reg0 == 16) || (reg1 == 16))
-    {
-        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
-        HALT_ILLEGAL(context);
-        return;
-    }
-
-    WRITE32(context, *register_list[reg1], *register_list[reg0]);
-}
-
-void ldptrb(SArch32* context) {
-    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
-    uint8_t* register8_list[] = FORM_REGISTER_LIST8(context);
-
-    uint8_t reg0 = (context->ar1 & 0xFF);
-    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
-
-    if((reg0  > sizeof(register8_list) / sizeof(void*)) ||
-        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
-        (reg1 == 16))
-    {
-        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
-        HALT_ILLEGAL(context);
-        return;
-    }
-
-    WRITE8(context, *register32_list[reg1], *register8_list[reg0]);
-}
-
-void ldptrw(SArch32* context) {
-    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
-    uint16_t* register16_list[] = FORM_REGISTER_LIST16(context);
-
-    uint8_t reg0 = (context->ar1 & 0xFF);
-    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
-
-    if((reg0  > sizeof(register16_list) / sizeof(void*)) ||
-        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
-        (reg1 == 16))
-    {
-        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
-        HALT_ILLEGAL(context);
-        return;
-    }
-
-    WRITE16(context, *register32_list[reg1], *register16_list[reg0]);
-}
-
-// Store to pointer at register from register
 // M[R0] -> R1
-void stptrd(SArch32* context) {
+void ldptrd(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
     uint8_t reg0 = (context->ar1 & 0xFF);
@@ -1032,7 +973,7 @@ void stptrd(SArch32* context) {
     *register_list[reg1] = READ32(context, *register_list[reg0]);
 }
 
-void stptrb(SArch32* context) {
+void ldptrb(SArch32* context) {
     uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
     uint8_t* register8_list[] = FORM_REGISTER_LIST8(context);
 
@@ -1051,7 +992,7 @@ void stptrb(SArch32* context) {
     *register8_list[reg1] = READ8(context, *register32_list[reg0]);
 }
 
-void stptrw(SArch32* context) {
+void ldptrw(SArch32* context) {
     uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
     uint16_t* register16_list[] = FORM_REGISTER_LIST16(context);
 
@@ -1068,6 +1009,64 @@ void stptrw(SArch32* context) {
     }
 
     *register16_list[reg1] = READ16(context, *register32_list[reg0]);
+}
+
+// Store to pointer at register from register
+// M[R1] <- R0
+void stptrd(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16) || (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE32(context, *register_list[reg1], *register_list[reg0]);
+}
+
+void stptrb(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint8_t* register8_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register8_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE8(context, *register32_list[reg1], *register8_list[reg0]);
+}
+
+void stptrw(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint16_t* register16_list[] = FORM_REGISTER_LIST16(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register16_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE16(context, *register32_list[reg1], *register16_list[reg0]);
 }
 
 void null_op(SArch32* context) {
@@ -1169,8 +1168,15 @@ void SArch32_step_instruction(SArch32 *sarch)
 
     if(sarch->log) {
         printf("%s\t\t", instructions[opc].name);
-        printf("r0: 0x%X r1: 0x%X r2: 0x%X r3: 0x%X sp: 0x%X bp: 0x%X ip: 0x%X\n",
+        printf("r0: 0x%X r1: 0x%X r2: 0x%X r3: 0x%X sp: 0x%X bp: 0x%X ip: 0x%X ",
             sarch->r0, sarch->r1, sarch->r2, sarch->r3, sarch->sp, sarch->bp, sarch->ip);
+        printf("FLAGS: CR: %d OV: %d ZR: %d GTR: %d LES: %d\n", 
+            get_mflag(sarch, M_CR),
+            get_mflag(sarch, M_OV),
+            get_mflag(sarch, M_ZR),
+            get_mflag(sarch, M_GTR),
+            get_mflag(sarch, M_LES)
+        );
     }
 }
 
