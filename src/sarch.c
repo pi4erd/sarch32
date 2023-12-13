@@ -81,11 +81,11 @@ void send_interrupt(SArch32* context, uint8_t code);
 #define INTERRUPT_IMM 0xF
 
 static uint32_t conditions[128] = {
-    M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0,
+    M_OV, M_CR, M_NG, M_ZR, M_GTR, M_LES, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
-    M_OV, M_CR, M_NG, M_ZR, 0, 0, 0, 0,
+    M_OV, M_CR, M_NG, M_ZR, M_GTR, M_LES, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -560,6 +560,7 @@ void ngi(SArch32* context) {
 
     if(*register_list[reg0] == 0x80000000) {
         set_mflag(context, M_OV, 1);
+        send_interrupt(context, MATH_OPERATION_ILLEGAL);
         return;
     }
 
@@ -607,6 +608,11 @@ void r_divsd(SArch32* context) {
         return;
     }
 
+    if(*register_list[reg1] == 0) {
+        send_interrupt(context, MATH_OPERATION_ILLEGAL);
+        return;
+    }
+
     *register_list[reg0] /= *register_list[reg1];
 
     set_mflag(context, M_OV, false);
@@ -648,6 +654,11 @@ void r_divud(SArch32* context) {
         HALT_ILLEGAL(context);
         return;
     }
+
+    if(*register_list[reg1] == 0) {
+        send_interrupt(context, MATH_OPERATION_ILLEGAL);
+        return;
+    }
     
     *register_list[reg0] /= *register_list[reg1];
 
@@ -687,6 +698,11 @@ void i_divsd(SArch32* context) {
         return;
     }
 
+    if(num == 0) {
+        send_interrupt(context, MATH_OPERATION_ILLEGAL);
+        return;
+    }
+
     *register_list[reg0] /= num;
 
     set_mflag(context, M_OV, false);
@@ -722,6 +738,11 @@ void i_divud(SArch32* context) {
         (reg0 == 16)) 
     {
         HALT_ILLEGAL(context);
+        return;
+    }
+
+    if(num == 0) {
+        send_interrupt(context, MATH_OPERATION_ILLEGAL);
         return;
     }
 
@@ -767,6 +788,162 @@ void cvfsd(SArch32* context) {
     *register_list[reg0] = (int32_t)value;
 }
 
+// imm compare signed double
+void icmpsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    int32_t num = context->ar1;
+    uint8_t reg = context->ar2 & 0xFF;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)) ||
+        (reg == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg] == num);
+    set_mflag(context, M_GTR, *register_list[reg] > num);
+    set_mflag(context, M_LES, *register_list[reg] < num);
+}
+
+// imm compare unsigned double
+void icmpud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint32_t num = context->ar1;
+    uint8_t reg = context->ar2 & 0xFF;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)) ||
+        (reg == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg] == num);
+    set_mflag(context, M_GTR, *register_list[reg] > num);
+    set_mflag(context, M_LES, *register_list[reg] < num);
+}
+
+// imm compare unsigned byte
+void icmpub(SArch32* context) {
+    uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t num = context->ar1 & 0xFF;
+    uint8_t reg = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg  > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg] == num);
+    set_mflag(context, M_GTR, *register_list[reg] > num);
+    set_mflag(context, M_LES, *register_list[reg] < num);
+}
+
+// imm compare unsigned word
+void icmpuw(SArch32* context) {
+    uint16_t* register_list[] = FORM_REGISTER_LIST16(context);
+
+    uint16_t num = context->ar1 & 0xFFFF;
+    uint8_t reg = (context->ar1 & 0xFF0000) >> 16;
+
+    if((reg > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg] == num);
+    set_mflag(context, M_GTR, *register_list[reg] > num);
+    set_mflag(context, M_LES, *register_list[reg] < num);
+}
+
+void rcmpsd(SArch32* context) {
+    int32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16) || (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg0] == *register_list[reg1]);
+    set_mflag(context, M_GTR, *register_list[reg0] > *register_list[reg1]);
+    set_mflag(context, M_LES, *register_list[reg0] < *register_list[reg1]);
+}
+
+void rcmpud(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16) || (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg0] == *register_list[reg1]);
+    set_mflag(context, M_GTR, *register_list[reg0] > *register_list[reg1]);
+    set_mflag(context, M_LES, *register_list[reg0] < *register_list[reg1]);
+}
+
+void rcmpub(SArch32* context) {
+    uint8_t* register_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg0] == *register_list[reg1]);
+    set_mflag(context, M_GTR, *register_list[reg0] > *register_list[reg1]);
+    set_mflag(context, M_LES, *register_list[reg0] < *register_list[reg1]);
+}
+
+void rcmpuw(SArch32* context) {
+    uint16_t* register_list[] = FORM_REGISTER_LIST16(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    set_mflag(context, M_ZR, *register_list[reg0] == *register_list[reg1]);
+    set_mflag(context, M_GTR, *register_list[reg0] > *register_list[reg1]);
+    set_mflag(context, M_LES, *register_list[reg0] < *register_list[reg1]);
+}
+
 // Disable interrupts
 void dsin(SArch32* context) {
     set_flag(context, S_ID, true);
@@ -775,6 +952,122 @@ void dsin(SArch32* context) {
 // Enable interrupts
 void esin(SArch32* context) {
     set_flag(context, S_ID, false);
+}
+
+// load from pointer at register into register
+// M[R1] <- R0
+void ldptrd(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16) || (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE32(context, *register_list[reg1], *register_list[reg0]);
+}
+
+void ldptrb(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint8_t* register8_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register8_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE8(context, *register32_list[reg1], *register8_list[reg0]);
+}
+
+void ldptrw(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint16_t* register16_list[] = FORM_REGISTER_LIST16(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register16_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    WRITE16(context, *register32_list[reg1], *register16_list[reg0]);
+}
+
+// Store to pointer at register from register
+// M[R0] -> R1
+void stptrd(SArch32* context) {
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register_list) / sizeof(void*)) ||
+        (reg0 == 16) || (reg1 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register_list[reg1] = READ32(context, *register_list[reg0]);
+}
+
+void stptrb(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint8_t* register8_list[] = FORM_REGISTER_LIST8(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register8_list) / sizeof(void*)) ||
+        (reg0 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register8_list[reg1] = READ8(context, *register32_list[reg0]);
+}
+
+void stptrw(SArch32* context) {
+    uint32_t* register32_list[] = FORM_REGISTER_LIST32(context);
+    uint16_t* register16_list[] = FORM_REGISTER_LIST16(context);
+
+    uint8_t reg0 = (context->ar1 & 0xFF);
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
+
+    if((reg0  > sizeof(register32_list) / sizeof(void*)) ||
+        (reg1  > sizeof(register16_list) / sizeof(void*)) ||
+        (reg0 == 16))
+    {
+        //send_interrupt(context, ILLEGAL_OP); // TODO: Change HALT_ILLEGAL to interrupt
+        HALT_ILLEGAL(context);
+        return;
+    }
+
+    *register16_list[reg1] = READ16(context, *register32_list[reg0]);
 }
 
 void null_op(SArch32* context) {
@@ -792,7 +1085,7 @@ const Instruction NULL_INSTR = {"ILLXINSTERRI", illegal, 0, 0};
  /// - Instruction function pointer with structure `void (*pointer)(SArch32*)`
  /// - Clock cycles needed to execute the instruction (basically any number)
  /// - Clock cycles needed to fetch the instruction's arguments (from 0 - 12 inclusive, HAS A FUNCTIONAL ROLE!)
- /// Instructions with opcode >128 take at least 2 bytes
+ /// Instructions with opcode >=128 take at least 2 bytes
 static const Instruction instructions[] = {
     // 0 0x0
     {"NOP", _nop, 2, 0}, {"HLT", halt, 3, 0}, {"RADD", r_add, 3, 2},
@@ -819,12 +1112,16 @@ static const Instruction instructions[] = {
     {"IDIVUD", i_divud, 7, 5}, {"CVSDF", cvsdf, 5, 1}, {"CVFSD", cvfsd, 7, 1},
 
     // 36 0x24 // TODO: Implement comparison instructions
-    {"ICMPSD", null_op, 3, 5}, {"ICMPUD", null_op, 3, 5}, {"ICMPUB", null_op, 2, 2},
-    {"ICMPUW", null_op, 2, 3}, {"RCMPSD", null_op, 2, 2}, {"RCMPUD", null_op, 2, 2},
+    {"ICMPSD", icmpsd, 3, 5}, {"ICMPUD", icmpud, 3, 5}, {"ICMPUB", icmpub, 2, 2},
+    {"ICMPUW", icmpuw, 2, 3}, {"RCMPSD", rcmpsd, 2, 2}, {"RCMPUD", rcmpud, 2, 2},
 
     // 42 0x2A
-    {"RCMPUB", null_op, 2, 2}, {"RCMPUW", null_op, 2, 2}, {"DSIN", dsin, 1, 0},
-    {"ESIN", esin, 1, 0}
+    {"RCMPUB", rcmpub, 2, 2}, {"RCMPUW", rcmpuw, 2, 2}, {"DSIN", dsin, 1, 0},
+    {"ESIN", esin, 1, 0}, {"LDPTRD", ldptrd, 4, 2}, {"LDPTRB", ldptrb, 2, 2},
+
+    // 48 0x30
+    {"LDPTRW", ldptrw, 3, 2}, {"STPTRD", stptrd, 4, 2}, {"STPTRB", stptrb, 2, 2},
+    {"STPTRW", stptrw, 2, 2}
 };
 
 #pragma endregion

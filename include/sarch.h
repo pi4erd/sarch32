@@ -32,6 +32,8 @@ enum MATH_FLAGS {
     M_CR = 1 << 1, // Carry
     M_NG = 1 << 2, // Negative
     M_ZR = 1 << 3, // Zero
+    M_GTR = 1 << 4,
+    M_LES = 1 << 5,
 };
 
 /**
@@ -50,6 +52,7 @@ enum MATH_FLAGS {
 
 enum INTERRUPTS {
     MATH_OPERATION_ILLEGAL = 0xF1,
+    ILLEGAL_OP = 0xF2,
     IRQ = 0xFE,
     NMI = 0xFF,
 };
