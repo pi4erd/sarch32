@@ -1111,7 +1111,7 @@ static const Instruction instructions[] = {
     {"IMULSD", i_mulsd, 6, 5}, {"IDIVSD", i_divsd, 7, 5}, {"IMULUD", i_mulud, 6, 5},
     {"IDIVUD", i_divud, 7, 5}, {"CVSDF", cvsdf, 5, 1}, {"CVFSD", cvfsd, 7, 1},
 
-    // 36 0x24 // TODO: Implement comparison instructions
+    // 36 0x24
     {"ICMPSD", icmpsd, 3, 5}, {"ICMPUD", icmpud, 3, 5}, {"ICMPUB", icmpub, 2, 2},
     {"ICMPUW", icmpuw, 2, 3}, {"RCMPSD", rcmpsd, 2, 2}, {"RCMPUD", rcmpud, 2, 2},
 
@@ -1167,8 +1167,11 @@ void SArch32_step_instruction(SArch32 *sarch)
 
     instructions[opc].function(sarch);
 
-    if(sarch->log)
-        printf("%s\n", instructions[opc].name);
+    if(sarch->log) {
+        printf("%s\t\t", instructions[opc].name);
+        printf("r0: 0x%X r1: 0x%X r2: 0x%X r3: 0x%X sp: 0x%X bp: 0x%X ip: 0x%X\n",
+            sarch->r0, sarch->r1, sarch->r2, sarch->r3, sarch->sp, sarch->bp, sarch->ip);
+    }
 }
 
 void SArch32_step_clock(SArch32 *sarch)
@@ -1275,7 +1278,6 @@ bool get_mflag(SArch32 *sarch, uint32_t flag)
 
 void send_interrupt(SArch32 *context, uint8_t code)
 {
-    // FIXME: Maybe find a way to make interrupts better? I don't know yet. Testing will show
     uint32_t addr = (uint32_t)code * 4 + context->tptr;
 
     if(code != NMI && !get_flag(context, S_ID)) {

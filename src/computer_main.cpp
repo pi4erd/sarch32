@@ -89,31 +89,35 @@ void init_devices()
 {
     Device bios(0, BIOS_SIZE - 1, 0, DEVICE_READ);
     Device ram(0x1000000, 0x1000000 + RAM_SIZE - 1, 100, DEVICE_READ | DEVICE_WRITE);
+    Device io(ram.to + 1, ram.to + 10, 100, DEVICE_WRITE);
 
     byte* bios_mem = (byte*)malloc(BIOS_SIZE);
     bios.context = bios_mem;
 
-    auto bios_read = [](uint32_t addr) {
+    bios.read = [](uint32_t addr) {
         return ((uint8_t*)devices[0].context)[addr];
     };
-    bios.read = bios_read;
 
     devices.push_back(bios);
 
     byte* ram_mem = (byte*)malloc(RAM_SIZE);
     ram.context = ram_mem;
 
-    auto ram_read = [](uint32_t addr) {
+    ram.read = [](uint32_t addr) {
         return ((uint8_t*)devices[1].context)[addr];
     };
-    auto ram_write = [](uint32_t addr, uint8_t data) {
+    ram.write = [](uint32_t addr, uint8_t data) {
         ((uint8_t*)devices[1].context)[addr] = data;
     };
 
-    ram.read = ram_read;
-    ram.write = ram_write;
-
     devices.push_back(ram);
+
+    io.write = [](uint32_t addr, uint8_t data) {
+        putc(data, stdout);
+    };
+    io.context = nullptr;
+
+    devices.push_back(io);
 }
 
 void destroy_devices()
