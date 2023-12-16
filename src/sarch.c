@@ -1234,7 +1234,7 @@ void SArch32_step_instruction(SArch32 *sarch)
     }
 }
 
-void SArch32_step_clock(SArch32 *sarch)
+void SArch32_step_clock(SArch32 *sarch, double speed)
 {
     if(get_flag(sarch, S_IL))
         return;
@@ -1260,7 +1260,8 @@ void SArch32_step_clock(SArch32 *sarch)
         SArch32_step_instruction(sarch);
         sarch->cycles = 0;
     }
-    const uint32_t nanos = 100000; // Clock speed = 10 kHz
+    uint32_t sleep_for = (uint32_t)(1.0 / speed * 1000000.0); // in ns
+    const uint32_t nanos = sleep_for;
     struct timespec remaining, request = { 0, nanos };
 
     int result = nanosleep(&request, &remaining);

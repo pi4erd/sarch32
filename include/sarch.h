@@ -142,7 +142,8 @@ typedef struct _SARCH32INST {
 
 SArch32* SArch32_new(ReadFunc read, WriteFunc write);
 void SArch32_step_instruction(SArch32* sarch);
-void SArch32_step_clock(SArch32* sarch);
+// Speed in kHz
+void SArch32_step_clock(SArch32* sarch, double speed);
 void SArch32_reset(SArch32* sarch);
 bool SArch32_is_halted(SArch32* sarch);
 bool SArch32_illegal(SArch32* sarch);

@@ -8,16 +8,33 @@
 #include <fstream>
 #include <iterator>
 
+
 std::vector<Device> devices;
 
-#pragma region Declarations
+
+#pragma region Defines
 
 #define K(N) N * 1024
 #define M(N) N * 1024 * 1024
 #define G(N) N * 1024 * 1024 * 1024
 
+#define BIOS_START 0
 #define BIOS_SIZE M(1)
+#define BIOS_END BIOS_START + BIOS_SIZE - 1
+
+#define RAM_START BIOS_END + 1
 #define RAM_SIZE M(16)
+#define RAM_END RAM_START + RAM_SIZE - 1
+
+#define STDIO_START RAM_END + 1
+#define STDIO_END STDIO_START + 1
+
+#define CLOCK_SPEED_KHZ 10.0
+
+#pragma endregion
+
+
+#pragma region Declarations
 
 void load_program_into(uint8_t* into, uint8_t* program, size_t program_size);
 std::vector<uint8_t> load_program_from_file(const char* path);
@@ -31,6 +48,7 @@ void write_devices(uint32_t addr, uint8_t data);
 
 #pragma endregion
 
+
 int main() {
     init_devices();
 
@@ -41,7 +59,7 @@ int main() {
 
     while(!SArch32_is_halted(cpu)) {
 #ifndef _DEBUG
-        SArch32_step_clock(cpu);
+        SArch32_step_clock(cpu, CLOCK_SPEED_KHZ);
 #else
         SArch32_step_instruction(cpu);
         getc(stdin);
@@ -58,6 +76,7 @@ int main() {
 
     return 0;
 }
+
 
 #pragma region Definitions
 
@@ -98,9 +117,9 @@ std::vector<uint8_t> load_program_from_file(const char *path)
 
 void init_devices()
 {
-    Device bios(0, BIOS_SIZE - 1, 0, DEVICE_READ);
-    Device ram(0x1000000, 0x1000000 + RAM_SIZE - 1, 100, DEVICE_READ | DEVICE_WRITE);
-    Device io(ram.to + 1, ram.to + 10, 100, DEVICE_WRITE);
+    Device bios(BIOS_START, BIOS_END, 0, DEVICE_READ);
+    Device ram(RAM_START, RAM_END, 100, DEVICE_READ | DEVICE_WRITE);
+    Device io(STDIO_START, STDIO_END, 100, DEVICE_READ | DEVICE_WRITE);
 
     byte* bios_mem = (byte*)malloc(BIOS_SIZE);
     bios.context = bios_mem;
@@ -125,6 +144,9 @@ void init_devices()
 
     io.write = [](uint32_t addr, uint8_t data) {
         putc(data, stdout);
+    };
+    io.read = [](uint32_t addr) {
+        return (uint8_t)0x00;
     };
     io.context = nullptr;
 

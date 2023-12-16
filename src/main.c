@@ -39,7 +39,7 @@ void run_realistic() {
     if(!cpu) return;
 
     while(!SArch32_is_halted(cpu)) {
-        SArch32_step_clock(cpu);
+        SArch32_step_clock(cpu, 10.0);
     }
 }
 
