@@ -72,6 +72,8 @@ int main() {
 
     printf("Stopped execution at %u steps!\n", cpu->total_cycles);
 
+    SArch32_destroy(cpu);
+
     destroy_devices();
 
     return 0;
