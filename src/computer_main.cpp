@@ -55,7 +55,11 @@ int main() {
     load_bios();
 
     SArch32* cpu = SArch32_new(read_devices, write_devices);
+#ifndef _DEBUG
     cpu->log = false;
+#else
+    cpu->log = true;
+#endif
 
     while(!SArch32_is_halted(cpu)) {
 #ifndef _DEBUG

@@ -85,3 +85,47 @@ void fetch_operand8(SArch32 *sarch, uint8_t number_of_operands)
         break;
     }
 }
+
+// POP: lo -> hi
+// PUSH: hi -> lo
+uint8_t popstack8(SArch32 *sarch)
+{
+    return READ8(sarch, ++sarch->sp);
+}
+
+uint16_t popstack16(SArch32 *sarch)
+{
+    uint16_t lo = (uint16_t)popstack8(sarch);
+    uint16_t hi = (uint16_t)popstack8(sarch);
+    return (hi << 8) | lo;
+}
+
+uint32_t popstack32(SArch32 *sarch)
+{
+    uint32_t lo = (uint32_t)popstack16(sarch);
+    uint32_t hi = (uint32_t)popstack16(sarch);
+    return (hi << 16) | lo;
+}
+
+void pushstack8(SArch32 *sarch, uint8_t data)
+{
+    WRITE8(sarch, sarch->sp--, data);
+}
+
+void pushstack32(SArch32 *sarch, uint32_t data)
+{
+    uint16_t lo = data & 0xFFFF;
+    uint16_t hi = (data & 0xFFFF0000) >> 16;
+
+    pushstack16(sarch, hi);
+    pushstack16(sarch, lo);
+}
+
+void pushstack16(SArch32 *sarch, uint16_t data)
+{
+    uint8_t lo = data & 0xFF;
+    uint8_t hi = (data & 0xFF00) >> 8;
+
+    pushstack8(sarch, hi);
+    pushstack8(sarch, lo);
+}

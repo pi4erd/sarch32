@@ -328,12 +328,12 @@ void jrc(SArch32* context) {
 
 // Pushes 32 bit register onto stack
 void push(SArch32* context) {
-    const uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
+    uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
     uint8_t reg0 = context->ar1 & 0xFF;
     
     // Look at what this expands to and be glad I wrote macros XD
-    PUSHSTACK32(context, *register_list[reg0]);
+    pushstack32(context, *register_list[reg0]);
 }
 
 // Pops 32 bit register from stack
@@ -342,7 +342,7 @@ void pop(SArch32* context) {
     
     uint8_t reg0 = context->ar1 & 0xFF;
 
-    *register_list[reg0] = POPSTACK32(context);
+    *register_list[reg0] = popstack32(context);
 }
 
 /**
@@ -351,8 +351,8 @@ void pop(SArch32* context) {
  * AR1 -> IP
  */
 void call(SArch32* context) {
-    PUSHSTACK32(context, context->sr);
-    PUSHSTACK32(context, context->ip);
+    pushstack32(context, context->sr);
+    pushstack32(context, context->ip);
 
     uint32_t addr = context->ar1;
 
@@ -365,8 +365,8 @@ void call(SArch32* context) {
  * AR1 + (INSTRUCTION BASE) -> IP
  */
 void callr(SArch32* context) {
-    PUSHSTACK32(context, context->sr);
-    PUSHSTACK32(context, context->ip);
+    pushstack32(context, context->sr);
+    pushstack32(context, context->ip);
 
     uint32_t offset = context->ar1;
 
@@ -378,8 +378,8 @@ void callr(SArch32* context) {
  * STACK -> SR
  */
 void ret(SArch32* context) {
-    uint32_t addr = POPSTACK32(context);
-    uint32_t status = POPSTACK32(context);
+    uint32_t addr = popstack32(context);
+    uint32_t status = popstack32(context);
 
     context->ip = addr;
     context->sr = status;
@@ -516,8 +516,8 @@ void m_sub(SArch32* context) {
 void r_sub(SArch32* context) {
     uint32_t* register_list[] = FORM_REGISTER_LIST32(context);
 
-    uint8_t reg0 = context->ar2 & 0xFF;
-    uint8_t reg1 = context->ar2 & 0xFF00;
+    uint8_t reg0 = context->ar1 & 0x00FF;
+    uint8_t reg1 = (context->ar1 & 0xFF00) >> 8;
 
     if((reg0  > sizeof(register_list) / sizeof(void*)) ||
         (reg1 > sizeof(register_list) / sizeof(void*)) ||
@@ -1222,14 +1222,15 @@ void SArch32_step_instruction(SArch32 *sarch)
 
     if(sarch->log) {
         printf("%s\t\t", instructions[opc].name);
-        printf("r0: 0x%X r1: 0x%X r2: 0x%X r3: 0x%X sp: 0x%X bp: 0x%X ip: 0x%X ",
-            sarch->r0, sarch->r1, sarch->r2, sarch->r3, sarch->sp, sarch->bp, sarch->ip);
-        printf("FLAGS: CR: %d OV: %d ZR: %d GTR: %d LES: %d\n", 
+        printf("r0: 0x%X r1: 0x%X r2: 0x%X r3: 0x%X r4: 0x%X r5: 0x%X sp: 0x%X bp: 0x%X ip: 0x%X ",
+            sarch->r0, sarch->r1, sarch->r2, sarch->r3, sarch->r4, sarch->r5, sarch->sp, sarch->bp, sarch->ip);
+        printf("FLAGS: CR: %d OV: %d ZR: %d GTR: %d LES: %d ID: %d\n", 
             get_mflag(sarch, M_CR),
             get_mflag(sarch, M_OV),
             get_mflag(sarch, M_ZR),
             get_mflag(sarch, M_GTR),
-            get_mflag(sarch, M_LES)
+            get_mflag(sarch, M_LES),
+            get_flag(sarch, S_ID)
         );
     }
 }
@@ -1339,16 +1340,19 @@ bool get_mflag(SArch32 *sarch, uint32_t flag)
 
 void send_interrupt(SArch32 *context, uint8_t code)
 {
-    uint32_t addr = (uint32_t)code * 4 + context->tptr;
+    uint32_t addr = ((uint32_t)code) * 4 + context->tptr;
 
-    if(code != NMI && !get_flag(context, S_ID)) {
+    // jump to address in M[addr]
+    uint32_t proc_addr = READ32(context, addr);
+
+    if(code != NMI && get_flag(context, S_ID)) {
         return;
     }
 
-    PUSHSTACK32(context, context->sr);
-    PUSHSTACK32(context, context->ip);
+    pushstack32(context, context->sr);
+    pushstack32(context, context->ip);
 
-    context->ip = addr;
+    context->ip = proc_addr;
 }
 
 #pragma endregion
