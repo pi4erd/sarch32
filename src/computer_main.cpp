@@ -8,9 +8,13 @@
 #include <fstream>
 #include <iterator>
 
+#include "devices/iodevice.hpp"
+#include "devices/ram.hpp"
+#include "devices/rom.hpp"
+#include "devices/stdiodev.hpp"
+#include "devices/diskdev.hpp"
 
-std::vector<Device> devices;
-
+std::vector<Device*> devices;
 
 #pragma region Defines
 
@@ -29,6 +33,8 @@ std::vector<Device> devices;
 #define STDIO_START RAM_END + 1
 #define STDIO_END STDIO_START + 1
 
+#define DISK0_IO_START STDIO_END + 1
+
 #define CLOCK_SPEED_KHZ 10.0
 
 #pragma endregion
@@ -36,12 +42,8 @@ std::vector<Device> devices;
 
 #pragma region Declarations
 
-void load_program_into(uint8_t* into, uint8_t* program, size_t program_size);
-std::vector<uint8_t> load_program_from_file(const char* path);
 void init_devices();
 void destroy_devices();
-
-void load_bios();
 
 uint8_t read_devices(uint32_t addr);
 void write_devices(uint32_t addr, uint8_t data);
@@ -51,8 +53,6 @@ void write_devices(uint32_t addr, uint8_t data);
 
 int main() {
     init_devices();
-
-    load_bios();
 
     SArch32* cpu = SArch32_new(read_devices, write_devices);
     cpu->log = false;
@@ -82,92 +82,28 @@ int main() {
 
 #pragma region Definitions
 
-void load_program_into(uint8_t *into, uint8_t *program, size_t program_size)
-{
-    std::memcpy(into, program, program_size);
-}
-
-std::vector<uint8_t> load_program_from_file(const char *path)
-{
-    using namespace std;
-
-    vector<uint8_t> program;
-
-    ifstream file(path, ios::binary);
-
-
-    if(!file.is_open()) return program;
-
-    file.unsetf(ios::skipws);
-
-    streampos fileSize;
-    
-    file.seekg(ios::end);
-    fileSize = file.tellg();
-    file.seekg(ios::beg);
-
-    program.reserve(fileSize);
-
-    program.insert(program.begin(),
-        istream_iterator<uint8_t>(file),
-        istream_iterator<uint8_t>());
-    
-    file.close();
-
-    return program;
-}
-
 void init_devices()
 {
-    Device bios(BIOS_START, BIOS_END, 0, DEVICE_READ);
-    Device ram(RAM_START, RAM_END, 100, DEVICE_READ | DEVICE_WRITE);
-    Device io(STDIO_START, STDIO_END, 100, DEVICE_READ | DEVICE_WRITE);
+    Rom* bios = new Rom("bios.bin", BIOS_START, BIOS_END, 0, ONLY_READ);
+    Ram* ram = new Ram(RAM_START, RAM_END, 100, READ_WRITE);
+    Stdout* io = new Stdout(STDIO_START, 100, READ_WRITE);
 
-    byte* bios_mem = (byte*)malloc(BIOS_SIZE);
-    bios.context = bios_mem;
-
-    bios.read = [](uint32_t addr) {
-        return ((uint8_t*)devices[0].context)[addr];
-    };
+    // create disk with 20 blocks of 256 ?= 5120 bytes
+    Disk* disk0 = new Disk("disk.raw", DISK0_IO_START, 20, 100, READ_WRITE);
 
     devices.push_back(bios);
-
-    byte* ram_mem = (byte*)malloc(RAM_SIZE);
-    ram.context = ram_mem;
-
-    ram.read = [](uint32_t addr) {
-        return ((uint8_t*)devices[1].context)[addr];
-    };
-    ram.write = [](uint32_t addr, uint8_t data) {
-        ((uint8_t*)devices[1].context)[addr] = data;
-    };
-
     devices.push_back(ram);
-
-    io.write = [](uint32_t addr, uint8_t data) {
-        putc(data, stdout);
-    };
-    io.read = [](uint32_t addr) {
-        return (uint8_t)0x00;
-    };
-    io.context = nullptr;
-
     devices.push_back(io);
+    devices.push_back(disk0);
 }
 
 void destroy_devices()
 {
     for(auto &device : devices) {
-        if(device.context != nullptr)
-            free(device.context);
+        if(device->context != nullptr)
+            free(device->context);
+        delete device;
     }
-}
-
-void load_bios()
-{
-    std::vector<uint8_t> bios = load_program_from_file("bios.bin");
-
-    load_program_into((uint8_t*)devices[0].context, bios.data(), bios.size());
 }
 
 uint8_t read_devices(uint32_t addr)
@@ -175,15 +111,15 @@ uint8_t read_devices(uint32_t addr)
     Device *highestPriority = nullptr;
 
     for(auto &device : devices) {
-        if(!(device.readwrite_mask & DEVICE_READ))
+        if(!(device->readwrite_mask & DEVICE_READ))
             continue;
-        if(RANGE_CHECK(addr, device.from, device.to)) {
+        if(RANGE_CHECK(addr, device->from, device->to)) {
             if(highestPriority != nullptr) {
-                if(highestPriority->priority < device.priority)
-                    highestPriority = &device;
+                if(highestPriority->priority < device->priority)
+                    highestPriority = device;
             }
             else
-                highestPriority = &device;
+                highestPriority = device;
         }
     }
 
@@ -197,15 +133,15 @@ void write_devices(uint32_t addr, uint8_t data)
     Device *highestPriority = nullptr;
 
     for(auto &device : devices) {
-        if(!(device.readwrite_mask & DEVICE_WRITE))
+        if(!(device->readwrite_mask & DEVICE_WRITE))
             continue;
-        if(RANGE_CHECK(addr, device.from, device.to)) {
+        if(RANGE_CHECK(addr, device->from, device->to)) {
             if(highestPriority != nullptr) {
-                if(highestPriority->priority < device.priority)
-                    highestPriority = &device;
+                if(highestPriority->priority < device->priority)
+                    highestPriority = device;
             }
             else
-                highestPriority = &device;
+                highestPriority = device;
         }
     }
 

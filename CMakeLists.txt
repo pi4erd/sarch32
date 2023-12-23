@@ -12,5 +12,8 @@ add_library(sarch ${LIB_SOURCE})
 add_executable(test_exec src/main.c)
 target_link_libraries(test_exec sarch)
 
-add_executable(${PROJECT_NAME} src/computer_main.cpp src/computer.cpp)
+add_executable(${PROJECT_NAME} src/computer_main.cpp src/computer.cpp
+    src/devices/iodevice.cpp src/devices/ram.cpp
+    src/devices/rom.cpp src/devices/stdiodev.cpp
+    src/devices/diskdev.cpp)
 target_link_libraries(${PROJECT_NAME} sarch)

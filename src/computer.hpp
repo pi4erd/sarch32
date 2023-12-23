@@ -3,7 +3,7 @@
 extern "C" {
     #include <sarch.h>
 }
-#include <stddef.h>
+#include <cstdint>
 
 #define RANGE_CHECK(N, MIN, MAX) (N >= MIN && N < MAX)
 
@@ -24,8 +24,8 @@ public:
     Device(uint32_t from, uint32_t to, uint32_t priority, uint8_t readwrite_mask);
     ~Device();
 
-    ReadFunc read;
-    WriteFunc write;
+    virtual uint8_t read(uint32_t addr) { return 0; };
+    virtual void write(uint32_t addr, uint8_t data) {}
 
     uint32_t from;
     uint32_t to;
