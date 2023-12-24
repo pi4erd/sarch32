@@ -31,6 +31,4 @@ public:
     uint32_t to;
     uint32_t priority;
     uint8_t readwrite_mask; // Bit 0 - can read, Bit 1 can write
-
-    void* context;
 };

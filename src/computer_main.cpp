@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <memory>
 
 #include "devices/iodevice.hpp"
 #include "devices/ram.hpp"
@@ -14,7 +15,7 @@
 #include "devices/stdiodev.hpp"
 #include "devices/diskdev.hpp"
 
-std::vector<Device*> devices;
+std::vector<std::unique_ptr<Device>> devices;
 
 #pragma region Defines
 
@@ -43,7 +44,6 @@ std::vector<Device*> devices;
 #pragma region Declarations
 
 void init_devices();
-void destroy_devices();
 
 uint8_t read_devices(uint32_t addr);
 void write_devices(uint32_t addr, uint8_t data);
@@ -74,8 +74,6 @@ int main() {
 
     SArch32_destroy(cpu);
 
-    destroy_devices();
-
     return 0;
 }
 
@@ -84,26 +82,17 @@ int main() {
 
 void init_devices()
 {
-    Rom* bios = new Rom("bios.bin", BIOS_START, BIOS_END, 0, ONLY_READ);
-    Ram* ram = new Ram(RAM_START, RAM_END, 100, READ_WRITE);
-    Stdout* io = new Stdout(STDIO_START, 100, READ_WRITE);
+    std::unique_ptr<Rom> bios = std::make_unique<Rom>("bios.bin", BIOS_START, BIOS_END, 0, ONLY_READ);
+    std::unique_ptr<Ram> ram = std::make_unique<Ram>(RAM_START, RAM_END, 100, READ_WRITE);
+    std::unique_ptr<Stdout> io = std::make_unique<Stdout>(STDIO_START, 100, READ_WRITE);
 
     // create disk with 20 blocks of 256 ?= 5120 bytes
-    Disk* disk0 = new Disk("disk.raw", DISK0_IO_START, 20, 100, READ_WRITE);
+    std::unique_ptr<Disk> disk0 = std::make_unique<Disk>("disk.raw", DISK0_IO_START, 20, 100, READ_WRITE);
 
-    devices.push_back(bios);
-    devices.push_back(ram);
-    devices.push_back(io);
-    devices.push_back(disk0);
-}
-
-void destroy_devices()
-{
-    for(auto &device : devices) {
-        if(device->context != nullptr)
-            free(device->context);
-        delete device;
-    }
+    devices.push_back(std::move(bios));
+    devices.push_back(std::move(ram));
+    devices.push_back(std::move(io));
+    devices.push_back(std::move(disk0));
 }
 
 uint8_t read_devices(uint32_t addr)
@@ -116,10 +105,10 @@ uint8_t read_devices(uint32_t addr)
         if(RANGE_CHECK(addr, device->from, device->to)) {
             if(highestPriority != nullptr) {
                 if(highestPriority->priority < device->priority)
-                    highestPriority = device;
+                    highestPriority = device.get();
             }
             else
-                highestPriority = device;
+                highestPriority = device.get();
         }
     }
 
@@ -138,10 +127,10 @@ void write_devices(uint32_t addr, uint8_t data)
         if(RANGE_CHECK(addr, device->from, device->to)) {
             if(highestPriority != nullptr) {
                 if(highestPriority->priority < device->priority)
-                    highestPriority = device;
+                    highestPriority = device.get();
             }
             else
-                highestPriority = device;
+                highestPriority = device.get();
         }
     }
 

@@ -8,6 +8,9 @@ Disk::Disk(std::string path, uint32_t addr, uint32_t block_count, uint32_t prior
 {
     disk_file.open(path, std::ios::binary | std::ios::out | std::ios::app);
     disk_file.close();
+    disk_file.open(path, std::ios::binary | std::ios::ate);
+    size_t filesize = disk_file.tellg();
+    disk_file.close();
     disk_file.open(path, std::ios::binary | std::ios::out | std::ios::in);
 
     if(!disk_file.is_open()) {
@@ -16,12 +19,14 @@ Disk::Disk(std::string path, uint32_t addr, uint32_t block_count, uint32_t prior
 
     std::vector<char> empty(BLOCK_SIZE, 0);
 
-    for(uint32_t i = 0; i < block_count; i++) {
-        if(!disk_file.write(empty.data(), BLOCK_SIZE)) {
-            throw std::runtime_error("Something went wrong writing to file!");
+    if(filesize == 0) {
+        for(uint32_t i = 0; i < block_count; i++) {
+            if(!disk_file.write(empty.data(), BLOCK_SIZE)) {
+                throw std::runtime_error("Something went wrong writing to file!");
+            }
         }
     }
-
+    
     block_is_loaded = false;
     loaded_block = 0;
 }
