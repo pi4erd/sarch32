@@ -37,6 +37,8 @@ void Disk::load_block(uint64_t blk_ptr)
         throw std::runtime_error("Block ptr outside of range! EH not implemented");
     }
 
+    busy = true;
+
     if(block_is_loaded)
         flush_block();
 
@@ -45,6 +47,7 @@ void Disk::load_block(uint64_t blk_ptr)
     s.resize(BLOCK_SIZE);
     disk_file.read(&s[0], BLOCK_SIZE);
 
+    busy = false;
     block_is_loaded = true;
     loaded_block = blk_ptr;
 }
@@ -57,17 +60,21 @@ void Disk::flush_block()
         throw std::runtime_error("Block ptr outside of range! EH not implemented");
     }
 
+    busy = true;
+
     disk_file.seekp(loaded_block * BLOCK_SIZE);
     disk_file.write((char*)buffer, BLOCK_SIZE);
     disk_file.flush();
 
-    block_is_loaded = false;
-    loaded_block = 0;
+    busy = false;
 }
 
 uint8_t Disk::read(uint32_t addr)
 {
-    if(RANGE_CHECK(addr, 9, 10)) {
+    if(RANGE_CHECK(addr, 0, 8)) {
+        // busy check
+        return (uint8_t)busy;
+    } else if(RANGE_CHECK(addr, 9, 10)) {
         if((block_is_loaded && (loaded_block != block_ptr)) || (!block_is_loaded))
             load_block(block_ptr);
         return buffer[byte_ptr];

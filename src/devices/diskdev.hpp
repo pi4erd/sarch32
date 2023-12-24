@@ -27,6 +27,7 @@ private:
     uint8_t byte_ptr;
 
     uint32_t block_count;
+    bool busy = false;
 
     std::fstream disk_file;
 
