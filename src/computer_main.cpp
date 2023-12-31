@@ -7,10 +7,16 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <memory>
 
+#include "devices/iodevice.hpp"
+#include "devices/ram.hpp"
+#include "devices/rom.hpp"
+#include "devices/stdiodev.hpp"
+#include "devices/diskdev.hpp"
+#include "devices/ioinfo.hpp"
 
-std::vector<Device> devices;
-
+std::vector<std::unique_ptr<Device>> devices;
 
 #pragma region Defines
 
@@ -29,6 +35,8 @@ std::vector<Device> devices;
 #define STDIO_START RAM_END + 1
 #define STDIO_END STDIO_START + 1
 
+#define DISK0_IO_START STDIO_END + 1
+
 #define CLOCK_SPEED_KHZ 10.0
 
 #pragma endregion
@@ -36,12 +44,7 @@ std::vector<Device> devices;
 
 #pragma region Declarations
 
-void load_program_into(uint8_t* into, uint8_t* program, size_t program_size);
-std::vector<uint8_t> load_program_from_file(const char* path);
 void init_devices();
-void destroy_devices();
-
-void load_bios();
 
 uint8_t read_devices(uint32_t addr);
 void write_devices(uint32_t addr, uint8_t data);
@@ -51,8 +54,6 @@ void write_devices(uint32_t addr, uint8_t data);
 
 int main() {
     init_devices();
-
-    load_bios();
 
     SArch32* cpu = SArch32_new(read_devices, write_devices);
 #ifndef _DEBUG
@@ -78,100 +79,29 @@ int main() {
 
     SArch32_destroy(cpu);
 
-    destroy_devices();
-
     return 0;
 }
 
 
 #pragma region Definitions
 
-void load_program_into(uint8_t *into, uint8_t *program, size_t program_size)
-{
-    std::memcpy(into, program, program_size);
-}
-
-std::vector<uint8_t> load_program_from_file(const char *path)
-{
-    using namespace std;
-
-    vector<uint8_t> program;
-
-    ifstream file(path, ios::binary);
-
-
-    if(!file.is_open()) return program;
-
-    file.unsetf(ios::skipws);
-
-    streampos fileSize;
-    
-    file.seekg(ios::end);
-    fileSize = file.tellg();
-    file.seekg(ios::beg);
-
-    program.reserve(fileSize);
-
-    program.insert(program.begin(),
-        istream_iterator<uint8_t>(file),
-        istream_iterator<uint8_t>());
-    
-    file.close();
-
-    return program;
-}
-
 void init_devices()
 {
-    Device bios(BIOS_START, BIOS_END, 0, DEVICE_READ);
-    Device ram(RAM_START, RAM_END, 100, DEVICE_READ | DEVICE_WRITE);
-    Device io(STDIO_START, STDIO_END, 100, DEVICE_READ | DEVICE_WRITE);
+    std::unique_ptr<Rom> bios = std::make_unique<Rom>("bios.bin", BIOS_START, BIOS_END, 0, ONLY_READ);
+    std::unique_ptr<Ram> ram = std::make_unique<Ram>(RAM_START, RAM_END, 100, READ_WRITE);
+    std::unique_ptr<Stdout> io = std::make_unique<Stdout>(STDIO_START, 100, READ_WRITE);
 
-    byte* bios_mem = (byte*)malloc(BIOS_SIZE);
-    bios.context = bios_mem;
+    // create disk with 20 blocks of 256 ?= 5120 bytes
+    std::unique_ptr<Disk> disk0 = std::make_unique<Disk>("disk.raw", DISK0_IO_START, 20, 100, READ_WRITE);
 
-    bios.read = [](uint32_t addr) {
-        return ((uint8_t*)devices[0].context)[addr];
-    };
+    std::unique_ptr<IOInfo> ioinfo = std::make_unique<IOInfo>(0x100000000 - IOINFO_SIZE, 
+        100, bios->span, ram->span, io->span, disk0->span);
 
-    devices.push_back(bios);
-
-    byte* ram_mem = (byte*)malloc(RAM_SIZE);
-    ram.context = ram_mem;
-
-    ram.read = [](uint32_t addr) {
-        return ((uint8_t*)devices[1].context)[addr];
-    };
-    ram.write = [](uint32_t addr, uint8_t data) {
-        ((uint8_t*)devices[1].context)[addr] = data;
-    };
-
-    devices.push_back(ram);
-
-    io.write = [](uint32_t addr, uint8_t data) {
-        putc(data, stdout);
-    };
-    io.read = [](uint32_t addr) {
-        return (uint8_t)0x00;
-    };
-    io.context = nullptr;
-
-    devices.push_back(io);
-}
-
-void destroy_devices()
-{
-    for(auto &device : devices) {
-        if(device.context != nullptr)
-            free(device.context);
-    }
-}
-
-void load_bios()
-{
-    std::vector<uint8_t> bios = load_program_from_file("bios.bin");
-
-    load_program_into((uint8_t*)devices[0].context, bios.data(), bios.size());
+    devices.push_back(std::move(bios));
+    devices.push_back(std::move(ram));
+    devices.push_back(std::move(io));
+    devices.push_back(std::move(disk0));
+    devices.push_back(std::move(ioinfo));
 }
 
 uint8_t read_devices(uint32_t addr)
@@ -179,21 +109,21 @@ uint8_t read_devices(uint32_t addr)
     Device *highestPriority = nullptr;
 
     for(auto &device : devices) {
-        if(!(device.readwrite_mask & DEVICE_READ))
+        if(!(device->readwrite_mask & DEVICE_READ))
             continue;
-        if(RANGE_CHECK(addr, device.from, device.to)) {
+        if(RANGE_CHECK(addr, device->span.from, device->span.to)) {
             if(highestPriority != nullptr) {
-                if(highestPriority->priority < device.priority)
-                    highestPriority = &device;
+                if(highestPriority->priority < device->priority)
+                    highestPriority = device.get();
             }
             else
-                highestPriority = &device;
+                highestPriority = device.get();
         }
     }
 
     if(highestPriority == nullptr)
         return (uint8_t)rand();
-    return highestPriority->read(addr - highestPriority->from);
+    return highestPriority->read(addr - highestPriority->span.from);
 }
 
 void write_devices(uint32_t addr, uint8_t data)
@@ -201,20 +131,20 @@ void write_devices(uint32_t addr, uint8_t data)
     Device *highestPriority = nullptr;
 
     for(auto &device : devices) {
-        if(!(device.readwrite_mask & DEVICE_WRITE))
+        if(!(device->readwrite_mask & DEVICE_WRITE))
             continue;
-        if(RANGE_CHECK(addr, device.from, device.to)) {
+        if(RANGE_CHECK(addr, device->span.from, device->span.to)) {
             if(highestPriority != nullptr) {
-                if(highestPriority->priority < device.priority)
-                    highestPriority = &device;
+                if(highestPriority->priority < device->priority)
+                    highestPriority = device.get();
             }
             else
-                highestPriority = &device;
+                highestPriority = device.get();
         }
     }
 
     if(highestPriority != nullptr)
-        highestPriority->write(addr - highestPriority->from, data);
+        highestPriority->write(addr - highestPriority->span.from, data);
 }
 
 #pragma endregion
