@@ -14,6 +14,7 @@
 #include "devices/rom.hpp"
 #include "devices/stdiodev.hpp"
 #include "devices/diskdev.hpp"
+#include "devices/ioinfo.hpp"
 
 std::vector<std::unique_ptr<Device>> devices;
 
@@ -89,10 +90,14 @@ void init_devices()
     // create disk with 20 blocks of 256 ?= 5120 bytes
     std::unique_ptr<Disk> disk0 = std::make_unique<Disk>("disk.raw", DISK0_IO_START, 20, 100, READ_WRITE);
 
+    std::unique_ptr<IOInfo> ioinfo = std::make_unique<IOInfo>(0x100000000 - IOINFO_SIZE, 
+        100, bios->span, ram->span, io->span, disk0->span);
+
     devices.push_back(std::move(bios));
     devices.push_back(std::move(ram));
     devices.push_back(std::move(io));
     devices.push_back(std::move(disk0));
+    devices.push_back(std::move(ioinfo));
 }
 
 uint8_t read_devices(uint32_t addr)
@@ -102,7 +107,7 @@ uint8_t read_devices(uint32_t addr)
     for(auto &device : devices) {
         if(!(device->readwrite_mask & DEVICE_READ))
             continue;
-        if(RANGE_CHECK(addr, device->from, device->to)) {
+        if(RANGE_CHECK(addr, device->span.from, device->span.to)) {
             if(highestPriority != nullptr) {
                 if(highestPriority->priority < device->priority)
                     highestPriority = device.get();
@@ -114,7 +119,7 @@ uint8_t read_devices(uint32_t addr)
 
     if(highestPriority == nullptr)
         return (uint8_t)rand();
-    return highestPriority->read(addr - highestPriority->from);
+    return highestPriority->read(addr - highestPriority->span.from);
 }
 
 void write_devices(uint32_t addr, uint8_t data)
@@ -124,7 +129,7 @@ void write_devices(uint32_t addr, uint8_t data)
     for(auto &device : devices) {
         if(!(device->readwrite_mask & DEVICE_WRITE))
             continue;
-        if(RANGE_CHECK(addr, device->from, device->to)) {
+        if(RANGE_CHECK(addr, device->span.from, device->span.to)) {
             if(highestPriority != nullptr) {
                 if(highestPriority->priority < device->priority)
                     highestPriority = device.get();
@@ -135,7 +140,7 @@ void write_devices(uint32_t addr, uint8_t data)
     }
 
     if(highestPriority != nullptr)
-        highestPriority->write(addr - highestPriority->from, data);
+        highestPriority->write(addr - highestPriority->span.from, data);
 }
 
 #pragma endregion

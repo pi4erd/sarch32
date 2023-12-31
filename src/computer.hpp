@@ -18,6 +18,15 @@ enum {
 
 typedef unsigned char byte;
 
+struct Span {
+public:
+    Span() : from(0), to(0) {}
+    Span(uint32_t from, uint32_t to) : from(from), to(to) {}
+
+    uint32_t from;
+    uint32_t to;
+};
+
 struct Device {
 public:
     Device();
@@ -27,8 +36,7 @@ public:
     virtual uint8_t read(uint32_t addr) { return 0; };
     virtual void write(uint32_t addr, uint8_t data) {}
 
-    uint32_t from;
-    uint32_t to;
+    Span span;
     uint32_t priority;
     uint8_t readwrite_mask; // Bit 0 - can read, Bit 1 can write
 };
