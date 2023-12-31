@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#define IOINFO_SIZE 32
+#define IOINFO_SIZE 64
 
 // This device, when queried, returns some information about devices on board
 class IOInfo : public Device {

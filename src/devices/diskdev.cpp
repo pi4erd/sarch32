@@ -4,7 +4,7 @@
 #include <vector>
 
 Disk::Disk(std::string path, uint32_t addr, uint32_t block_count, uint32_t priority, uint8_t rw_mask)
-    : Device(addr, addr + 11, priority, rw_mask), block_count(block_count)
+    : Device(addr, addr + 14, priority, rw_mask), block_count(block_count)
 {
     disk_file.open(path, std::ios::binary | std::ios::out | std::ios::app);
     disk_file.close();
@@ -79,10 +79,16 @@ uint8_t Disk::read(uint32_t addr)
     if(RANGE_CHECK(addr, 0, 8)) {
         // busy check
         return (uint8_t)busy;
-    } else if(RANGE_CHECK(addr, 9, 10)) {
+    } else if(RANGE_CHECK(addr, 8, 12)) {
         if((block_is_loaded && (loaded_block != block_ptr)) || (!block_is_loaded))
             load_block(block_ptr);
-        return buffer[byte_ptr];
+        uint8_t subblock[4] = {
+            buffer[byte_ptr + 0],
+            buffer[byte_ptr + 1],
+            buffer[byte_ptr + 2],
+            buffer[byte_ptr + 3],
+        };
+        return subblock[addr - 8];
     }
     return 0;
 }
@@ -101,11 +107,18 @@ void Disk::write(uint32_t addr, uint8_t data)
         block_ptr |= ((uint64_t)data) << mask_shift;
     } else if(RANGE_CHECK(addr, 8, 9)) {
         byte_ptr = data;
-    } else if(RANGE_CHECK(addr, 9, 10)) {
+    } else if(RANGE_CHECK(addr, 9, 13)) {
         if((block_is_loaded && (loaded_block != block_ptr)) || (!block_is_loaded))
             load_block(block_ptr);
+        uint8_t* subblock[4] = {
+            &buffer[byte_ptr + 0],
+            &buffer[byte_ptr + 1],
+            &buffer[byte_ptr + 2],
+            &buffer[byte_ptr + 3],
+        };
+        *subblock[addr - 9] = data;
         buffer[byte_ptr] = data;
-    } else if(RANGE_CHECK(addr, 10, 11)) {
+    } else if(RANGE_CHECK(addr, 13, 14)) {
         if(block_is_loaded)
             flush_block();
     }
